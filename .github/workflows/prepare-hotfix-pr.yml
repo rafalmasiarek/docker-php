@@ -93,8 +93,7 @@ jobs:
               if: github.event_name == 'workflow_dispatch' || github.event.action != 'edited'
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number
-                      }}
+                  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
               shell: bash
               run: |
                   set -euo pipefail
