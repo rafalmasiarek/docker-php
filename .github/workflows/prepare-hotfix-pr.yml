@@ -1,0 +1,117 @@
+name: prepare-hotfix-pr
+
+on:
+    issues:
+        types: [ opened, edited, labeled ]
+    workflow_dispatch:
+        inputs:
+            issue_number:
+                description: "Issue number to generate a hotfix PR from"
+                required: true
+                type: string
+
+permissions:
+    contents: write
+    pull-requests: write
+    issues: write
+
+concurrency:
+    group: prepare-hotfix-pr-${{ github.event.issue.number ||
+        github.event.inputs.issue_number }}
+    cancel-in-progress: false
+
+jobs:
+    prepare:
+        name: prepare hotfix pull request
+        runs-on: ubuntu-latest
+        if: >
+            github.event_name == 'workflow_dispatch' || (
+              contains(github.event.issue.labels.*.name, 'security') &&
+              contains(github.event.issue.labels.*.name, 'trivy')
+            )
+
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Install Python dependencies
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  python3 -m pip install --user PyYAML
+
+            - name: Generate hotfix files from issue
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  python3 scripts/create-hotfix-pr-from-issue.py \
+                    --repo "${{ github.repository }}" \
+                    --issue "${ISSUE_NUMBER}" \
+                    --output generated-hotfix.json
+
+            - name: Create or update pull request
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number
+                      }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  if git diff --quiet; then
+                    echo "No hotfix changes were generated."
+                    exit 0
+                  fi
+
+                  BRANCH="hotfix/security-issue-${ISSUE_NUMBER}"
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+                  git checkout -B "${BRANCH}"
+
+                  git add hotfixes/ generated-hotfix.json
+                  git commit -m "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}"
+
+                  git push --force-with-lease origin "${BRANCH}"
+
+                  if gh pr view "${BRANCH}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+                    gh pr edit "${BRANCH}" \
+                      --repo "${{ github.repository }}" \
+                      --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
+                      --body-file generated-hotfix.json
+                  else
+                    {
+                      echo "Adds an Alpine hotfix generated from security issue #${ISSUE_NUMBER}."
+                      echo
+                      echo "After merge, the regular image build will verify whether the CVE is gone."
+                      echo
+                      echo "Fixes #${ISSUE_NUMBER}"
+                    } > pr-body.md
+
+                    gh pr create \
+                      --repo "${{ github.repository }}" \
+                      --base main \
+                      --head "${BRANCH}" \
+                      --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
+                      --body-file pr-body.md
+                  fi
+
+            - name: Comment on issue
+              if: github.event_name == 'workflow_dispatch' || github.event.action != 'edited'
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number
+                      }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  gh issue comment "${ISSUE_NUMBER}" \
+                    --repo "${{ github.repository }}" \
+                    --body "Generated or updated a hotfix pull request for this issue."
