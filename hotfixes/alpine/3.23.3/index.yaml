@@ -93,3 +93,11 @@ hotfixes:
         - CVE-2026-27135
       packages:
         - nghttp2-libs<1.68.1
+  - id: apk-upgrade-cve-2026-34743
+    file: apk-upgrade-cve-2026-34743.sh
+    match:
+      cves:
+        - CVE-2026-34743
+      packages:
+        - xz-libs<5.8.3-r0
+        - xz<5.8.3-r0
