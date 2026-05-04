@@ -1,0 +1,8 @@
+hotfixes:
+  - id: apk-upgrade-cve-2026-27135
+    file: apk-upgrade-cve-2026-27135.sh
+    match:
+      cves:
+        - CVE-2026-27135
+      packages:
+        - nghttp2-libs<1.68.1
