@@ -216,9 +216,6 @@ def append_hotfix_to_index(path: Path, entry: dict[str, Any]) -> None:
     packages = entry["match"]["packages"]
 
     block = [
-        "",
-        "  # BEGIN AUTO-GENERATED HOTFIX",
-        "  # generator: trivy-issue-hotfix-pr",
         f"  - id: {hotfix_id}",
         f"    file: {entry['file']}",
         "    match:",
@@ -226,8 +223,6 @@ def append_hotfix_to_index(path: Path, entry: dict[str, Any]) -> None:
         *[f"        - {cve}" for cve in cves],
         "      packages:",
         *[f"        - {package}" for package in packages],
-        "  # END AUTO-GENERATED HOTFIX",
-        "",
     ]
 
     path.write_text(content.rstrip() + "\n" + "\n".join(block), encoding="utf-8")
