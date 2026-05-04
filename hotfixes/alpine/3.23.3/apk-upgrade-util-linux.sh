@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-apk upgrade --no-cache libblkid libmount libuuid
+apk add --no-cache --upgrade libblkid libmount libuuid

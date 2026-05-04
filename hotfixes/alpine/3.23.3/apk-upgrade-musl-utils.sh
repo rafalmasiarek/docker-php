@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eux
-apk upgrade --no-cache musl musl-utils
+apk add --no-cache --upgrade musl musl-utils

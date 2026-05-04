@@ -172,7 +172,7 @@ def write_hotfix_script(path: Path, packages: list[dict[str, str]]) -> None:
         "#!/usr/bin/env sh\n"
         "set -eu\n"
         "\n"
-        f"apk upgrade --no-cache {' '.join(upgrade_args)}\n",
+        f"apk add --no-cache --upgrade {' '.join(upgrade_args)}\n",
         encoding="utf-8",
     )
 

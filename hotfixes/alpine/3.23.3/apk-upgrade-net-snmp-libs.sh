@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-apk upgrade --no-cache net-snmp-libs
+apk add --no-cache --upgrade net-snmp-libs

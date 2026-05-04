@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
 
-apk upgrade --no-cache openssl libcrypto3 libssl3
+apk add --no-cache --upgrade openssl libcrypto3 libssl3

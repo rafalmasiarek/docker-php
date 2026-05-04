@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eux
 
-apk upgrade --no-cache imagemagick imagemagick-jpeg imagemagick-libs
+apk add --no-cache --upgrade imagemagick imagemagick-jpeg imagemagick-libs
