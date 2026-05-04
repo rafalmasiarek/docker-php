@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-apk upgrade --no-cache zlib
+apk add --no-cache --upgrade zlib
