@@ -1616,6 +1616,22 @@ jobs:
 
               const packageNames = uniq(packageRows.map(row => row.package).filter(Boolean));
 
+              const hotfixJson = {
+                scope: group.scope,
+                cve: group.cve,
+                severity: group.severity,
+                php: group.php || "",
+                alpine_minor: group.alpine_minor,
+                alpine_full_versions: alpineFull,
+                php_branches: phpBranches,
+                variants,
+                packages: packageRows.map(row => ({
+                  name: row.package || "",
+                  installed_version: row.installed_version || "",
+                  fixed_version: row.fixed_version || "",
+                })).filter(row => row.name && row.fixed_version),
+              };
+
               const body = [
                 `Automated Trivy scan detected an unresolved vulnerability.`,
                 ``,
@@ -1669,6 +1685,9 @@ jobs:
                 `<!-- variants:${variants.join(",")} -->`,
                 `<!-- packages:${packageNames.join(",")} -->`,
                 `<!-- matched-hotfix-scripts:${matchedHotfixScripts.length} -->`,
+                `<!-- trivy-hotfix-json:`,
+                JSON.stringify(hotfixJson, null, 2),
+                `-->`,
               ].join("\n");
 
               const existing = managedOpenIssues.find(issue => parseMarkerValue(issue.body, "cve-key") === key);
