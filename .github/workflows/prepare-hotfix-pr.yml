@@ -41,19 +41,6 @@ jobs:
                   set -euo pipefail
                   python3 -m pip install --user PyYAML
 
-            - name: Generate hotfix files from issue
-              env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
-              shell: bash
-              run: |
-                  set -euo pipefail
-
-                  python3 scripts/create-hotfix-pr-from-issue.py \
-                    --repo "${{ github.repository }}" \
-                    --issue "${ISSUE_NUMBER}" \
-                    --output generated-hotfix.json
-
             - name: Create or update pull request
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,19 +50,27 @@ jobs:
               run: |
                   set -euo pipefail
 
-                  if git diff --quiet; then
-                    echo "No hotfix changes were generated."
-                    exit 0
-                  fi
-
                   BRANCH="hotfix/security-issue-${ISSUE_NUMBER}"
 
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
 
-                  git checkout -B "${BRANCH}"
+                  # Always rebuild the PR branch from the latest main branch.
+                  # This keeps hotfix index files fresh and avoids accumulating stale edits.
+                  git fetch origin main
+                  git checkout -B "${BRANCH}" origin/main
 
-                  git add hotfixes/ generated-hotfix.json
+                  python3 scripts/create-hotfix-pr-from-issue.py \
+                    --repo "${{ github.repository }}" \
+                    --issue "${ISSUE_NUMBER}" \
+                    --output /tmp/generated-hotfix-pr-body.md
+
+                  if git diff --quiet; then
+                    echo "No hotfix changes were generated."
+                    exit 0
+                  fi
+
+                  git add hotfixes/
                   git commit -m "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}"
 
                   git push --force-with-lease origin "${BRANCH}"
@@ -84,22 +79,14 @@ jobs:
                     gh pr edit "${BRANCH}" \
                       --repo "${{ github.repository }}" \
                       --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
-                      --body-file generated-hotfix.json
+                      --body-file /tmp/generated-hotfix-pr-body.md
                   else
-                    {
-                      echo "Adds an Alpine hotfix generated from security issue #${ISSUE_NUMBER}."
-                      echo
-                      echo "After merge, the regular image build will verify whether the CVE is gone."
-                      echo
-                      echo "Fixes #${ISSUE_NUMBER}"
-                    } > pr-body.md
-
                     gh pr create \
                       --repo "${{ github.repository }}" \
                       --base main \
                       --head "${BRANCH}" \
                       --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
-                      --body-file pr-body.md
+                      --body-file /tmp/generated-hotfix-pr-body.md
                   fi
 
             - name: Comment on issue

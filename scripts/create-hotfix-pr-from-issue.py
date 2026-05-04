@@ -12,8 +12,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 
 HOTFIX_MARKER_RE = re.compile(
     r"<!--\s*trivy-hotfix-json:\s*(.*?)\s*-->",
@@ -143,47 +141,6 @@ def normalize_hotfix_data(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_index(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {"hotfixes": []}
-
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-    if not isinstance(data, dict):
-        raise SystemExit(f"Invalid YAML root in {path}")
-
-    data.setdefault("hotfixes", [])
-
-    if not isinstance(data["hotfixes"], list):
-        raise SystemExit(f"Invalid hotfixes list in {path}")
-
-    return data
-
-
-def save_index(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump(
-            data,
-            sort_keys=False,
-            allow_unicode=True,
-            default_flow_style=False,
-        ),
-        encoding="utf-8",
-    )
-
-
-def upsert_hotfix(index: dict[str, Any], entry: dict[str, Any]) -> None:
-    hotfixes = index.setdefault("hotfixes", [])
-
-    for idx, existing in enumerate(hotfixes):
-        if existing.get("id") == entry["id"]:
-            hotfixes[idx] = entry
-            return
-
-    hotfixes.append(entry)
-
-
 def shell_single_quote(value: str) -> str:
     return "'" + value.replace("'", "'\"'\"'") + "'"
 
@@ -237,18 +194,43 @@ def build_package_match_rules(packages: list[dict[str, str]]) -> list[str]:
     return sorted(set(rules))
 
 
-def merge_existing_cves(index: dict[str, Any], hotfix_id: str, cves: list[str]) -> list[str]:
-    merged = set(cves)
+def append_hotfix_to_index(path: Path, entry: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    for item in index.get("hotfixes", []):
-        if item.get("id") != hotfix_id:
-            continue
+    hotfix_id = entry["id"]
 
-        for cve in item.get("match", {}).get("cves", []) or []:
-            if isinstance(cve, str) and cve.strip():
-                merged.add(cve.strip())
+    if path.exists():
+        content = path.read_text(encoding="utf-8")
+    else:
+        content = "hotfixes:\n"
 
-    return sorted(merged)
+    if (
+        f"id: {hotfix_id}" in content
+        or f'id: "{hotfix_id}"' in content
+        or f"id: '{hotfix_id}'" in content
+    ):
+        print(f"Hotfix {hotfix_id} already exists in {path}, skipping index update.")
+        return
+
+    cves = entry["match"]["cves"]
+    packages = entry["match"]["packages"]
+
+    block = [
+        "",
+        "  # BEGIN AUTO-GENERATED HOTFIX",
+        "  # generator: trivy-issue-hotfix-pr",
+        f"  - id: {hotfix_id}",
+        f"    file: {entry['file']}",
+        "    match:",
+        "      cves:",
+        *[f"        - {cve}" for cve in cves],
+        "      packages:",
+        *[f"        - {package}" for package in packages],
+        "  # END AUTO-GENERATED HOTFIX",
+        "",
+    ]
+
+    path.write_text(content.rstrip() + "\n" + "\n".join(block), encoding="utf-8")
 
 
 def generate_hotfix_files(data: dict[str, Any]) -> list[str]:
@@ -263,22 +245,18 @@ def generate_hotfix_files(data: dict[str, Any]) -> list[str]:
         script_path = hotfix_dir / script_name
         index_path = hotfix_dir / "index.yaml"
 
-        index = load_index(index_path)
-        merged_cves = merge_existing_cves(index, hotfix_id, data["cves"])
-
         write_hotfix_script(script_path, data["packages"])
 
         entry = {
             "id": hotfix_id,
             "file": script_name,
             "match": {
-                "cves": merged_cves,
+                "cves": data["cves"],
                 "packages": build_package_match_rules(data["packages"]),
             },
         }
 
-        upsert_hotfix(index, entry)
-        save_index(index_path, index)
+        append_hotfix_to_index(index_path, entry)
 
         changed_files.append(str(script_path))
         changed_files.append(str(index_path))
@@ -290,11 +268,10 @@ def build_pr_summary(issue_number: str, data: dict[str, Any], changed_files: lis
     cves = ", ".join(f"`{cve}`" for cve in data["cves"])
     alpine_versions = ", ".join(f"`{version}`" for version in data["alpine_full_versions"])
 
-    package_lines = []
-    for package in data["packages"]:
-        package_lines.append(
-            f"- `{package['name']}`: `{package['installed_version'] or 'unknown'}` -> `{package['fixed_version']}`"
-        )
+    package_lines = [
+        f"- `{package['name']}`: `{package['installed_version'] or 'unknown'}` -> `{package['fixed_version']}`"
+        for package in data["packages"]
+    ]
 
     file_lines = [f"- `{path}`" for path in changed_files]
 
@@ -330,8 +307,8 @@ def main() -> int:
     parser.add_argument("--issue", required=True, help="GitHub issue number.")
     parser.add_argument(
         "--output",
-        default="generated-hotfix.json",
-        help="Write generated PR summary to this file.",
+        default="/tmp/generated-hotfix-pr-body.md",
+        help="Write generated PR summary markdown to this file.",
     )
 
     args = parser.parse_args()
@@ -355,7 +332,6 @@ def main() -> int:
     changed_files = generate_hotfix_files(data)
 
     summary = build_pr_summary(str(args.issue), data, changed_files)
-
     Path(args.output).write_text(summary, encoding="utf-8")
 
     report = {
@@ -363,11 +339,6 @@ def main() -> int:
         "data": data,
         "changed_files": changed_files,
     }
-
-    Path("generated-hotfix-report.json").write_text(
-        json.dumps(report, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
 
     print(json.dumps(report, indent=2, sort_keys=True))
 
