@@ -7,3 +7,10 @@ hotfixes:
       packages:
         - xz-libs<5.8.3-r0
         - xz<5.8.3-r0
+  - id: apk-upgrade-cve-2026-41254
+    file: apk-upgrade-cve-2026-41254.sh
+    match:
+      cves:
+        - CVE-2026-41254
+      packages:
+        - lcms2<2.19-r0
