@@ -39,7 +39,7 @@ permissions:
 
 concurrency:
   group: build-php-images-sanity-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   IMAGE_NAME: php
