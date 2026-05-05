@@ -79,14 +79,15 @@ jobs:
                       --issue "${ISSUE_NUMBER}" \
                       --output /tmp/generated-hotfix-pr-body-${ISSUE_NUMBER}.md
 
-                    if git diff --quiet; then
+                    git add hotfixes/
+
+                    if git diff --cached --quiet; then
                       echo "No changes for ${BRANCH}."
                       git reset --hard
                       git clean -fd
                       continue
                     fi
 
-                    git add hotfixes/
                     git commit -m "fix(hotfix): refresh remediation for issue #${ISSUE_NUMBER}"
                     git push --force-with-lease origin "${BRANCH}"
 
