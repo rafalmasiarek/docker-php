@@ -13,6 +13,7 @@ on:
   push:
     branches:
       - "bot/add-php-*"
+      - "hotfix/security-issue-*"
     paths:
       - "versions/**"
       - "rootfs/**"
@@ -593,6 +594,14 @@ jobs:
           post_high="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results-post.json)"
           post_medium="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results-post.json)"
 
+          fixed_cves="${{ steps.remediation.outputs.fixed_cves }}"
+          remaining_cves="${{ steps.remediation.outputs.remaining_cves }}"
+          new_cves="${{ steps.remediation.outputs.new_cves }}"
+
+          [ -z "$fixed_cves" ] && fixed_cves="none"
+          [ -z "$remaining_cves" ] && remaining_cves="none"
+          [ -z "$new_cves" ] && new_cves="none"
+
           {
             echo
             echo "### Security summary"
@@ -602,15 +611,24 @@ jobs:
             echo "| Before hotfixes | ${pre_critical} | ${pre_high} | ${pre_medium} |"
             echo "| After hotfixes | ${post_critical} | ${post_high} | ${post_medium} |"
             echo
-            echo "### Hotfix matching"
+            echo "### Hotfix verification"
             echo
             echo "- Hotfix scripts selected: \`${{ steps.hotfixes.outputs.selected_count }}\`"
-            echo "- Matching hotfix CVEs found: \`${{ steps.hotfixes.outputs.matched_cves || 'none' }}\`"
-            echo "- Unmatched CVEs: \`${{ steps.hotfixes.outputs.unmatched_cves || 'none' }}\`"
             echo "- Hotfix rebuild performed: \`${{ steps.hotfixes.outputs.enabled }}\`"
-            echo "- Fixed CVEs after rebuild: \`${{ steps.remediation.outputs.fixed_count }}\`"
-            echo "- Remaining CVEs after rebuild: \`${{ steps.remediation.outputs.remaining_count }}\`"
-            echo "- New CVEs after rebuild: \`${{ steps.remediation.outputs.new_count }}\`"
+            echo "- Matching hotfix CVEs found: \`${{ steps.hotfixes.outputs.matched_cves || 'none' }}\`"
+            echo "- Unmatched CVEs before hotfix selection: \`${{ steps.hotfixes.outputs.unmatched_cves || 'none' }}\`"
+            echo "- Fixed CVEs after rebuild: \`${fixed_cves}\`"
+            echo "- Remaining CVEs after rebuild: \`${remaining_cves}\`"
+            echo "- New CVEs after rebuild: \`${new_cves}\`"
+            echo
+            echo "### Verdict"
+            if [ "${{ steps.hotfixes.outputs.enabled }}" = "true" ] && [ "${{ steps.remediation.outputs.fixed_count }}" -gt 0 ]; then
+              echo "✅ Hotfix was selected, image rebuilt, and at least one CVE disappeared after rebuild."
+            elif [ "${{ steps.hotfixes.outputs.enabled }}" = "true" ]; then
+              echo "⚠️ Hotfix was selected and image rebuilt, but no CVE disappeared after rebuild."
+            else
+              echo "❌ No hotfix was selected for this image."
+            fi
           } >> "$REPORT_PATH"
 
       - name: Upload report artifact
