@@ -160,22 +160,31 @@ def build_upgrade_args(packages: list[dict[str, str]]) -> list[str]:
     return sorted(set(args))
 
 
-def write_hotfix_script(path: Path, packages: list[dict[str, str]]) -> None:
+def write_hotfix_script(
+    path: Path,
+    packages: list[dict[str, str]],
+    *,
+    hotfix_id: str,
+    cves: list[str],
+) -> None:
     upgrade_args = build_upgrade_args(packages)
-
     if not upgrade_args:
         raise SystemExit("No apk upgrade arguments were generated.")
 
-    path.parent.mkdir(parents=True, exist_ok=True)
+    package_match_rules = build_package_match_rules(packages)
 
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "#!/usr/bin/env sh\n"
+        "# generated-by: create-hotfix-pr-from-issue.py\n"
+        f"# hotfix-id: {hotfix_id}\n"
+        f"# hotfix-cves: {','.join(cves)}\n"
+        f"# hotfix-packages: {','.join(package_match_rules)}\n"
         "set -eu\n"
         "\n"
         f"apk add --no-cache --upgrade {' '.join(upgrade_args)}\n",
         encoding="utf-8",
     )
-
     path.chmod(path.stat().st_mode | 0o111)
 
 
@@ -238,23 +247,15 @@ def generate_hotfix_files(data: dict[str, Any]) -> list[str]:
     for alpine_version in data["alpine_full_versions"]:
         hotfix_dir = Path("hotfixes") / "alpine" / alpine_version
         script_path = hotfix_dir / script_name
-        index_path = hotfix_dir / "index.yaml"
 
-        write_hotfix_script(script_path, data["packages"])
-
-        entry = {
-            "id": hotfix_id,
-            "file": script_name,
-            "match": {
-                "cves": data["cves"],
-                "packages": build_package_match_rules(data["packages"]),
-            },
-        }
-
-        append_hotfix_to_index(index_path, entry)
+        write_hotfix_script(
+            script_path,
+            data["packages"],
+            hotfix_id=hotfix_id,
+            cves=data["cves"],
+        )
 
         changed_files.append(str(script_path))
-        changed_files.append(str(index_path))
 
     return sorted(set(changed_files))
 
