@@ -77,6 +77,73 @@ def extract_hotfix_json(body: str) -> dict[str, Any]:
     raise SystemExit("Missing or invalid trivy-hotfix-json marker in issue body.")
 
 
+def extract_hotfix_data_from_legacy_issue(body: str) -> dict[str, Any]:
+    cves = sorted(set(re.findall(r"CVE-\d{4}-\d{4,}", body)))
+
+    alpine_minor = ""
+    alpine_full_versions: list[str] = []
+
+    match = re.search(
+        r"Alpine branch:\s*`([^`]+)`",
+        body,
+        re.IGNORECASE,
+    )
+    if match:
+        alpine_minor = match.group(1).strip()
+
+    match = re.search(
+        r"Alpine version detected in affected images:\s*`([^`]+)`",
+        body,
+        re.IGNORECASE,
+    )
+    if match:
+        alpine_full_versions = [
+            item.strip()
+            for item in match.group(1).split(",")
+            if item.strip()
+        ]
+
+    packages: list[dict[str, str]] = []
+
+    for name, installed_version, fixed_version in re.findall(
+        r"`([^`]+)`\s+`([^`]+)`\s+`([^`]+)`",
+        body,
+    ):
+        if not re.match(r"^[a-z0-9][a-z0-9+_.-]*$", name, re.IGNORECASE):
+            continue
+
+        if fixed_version.lower() in {"unknown", "none", "n/a"}:
+            continue
+
+        if not re.search(r"\d", fixed_version):
+            continue
+
+        packages.append(
+            {
+                "name": name,
+                "installed_version": installed_version,
+                "fixed_version": fixed_version,
+            }
+        )
+
+    if not cves or not alpine_full_versions or not packages:
+        raise SystemExit("Missing or invalid trivy-hotfix-json marker in issue body.")
+
+    return {
+        "schema_version": 1,
+        "source": "legacy-issue-body",
+        "scope": "",
+        "severity": "",
+        "php": "",
+        "alpine_minor": alpine_minor,
+        "alpine_full_versions": alpine_full_versions,
+        "php_branches": [],
+        "variants": [],
+        "cves": cves,
+        "packages": packages,
+    }
+
+
 def normalize_hotfix_data(data: dict[str, Any]) -> dict[str, Any]:
     cves = normalize_list(data.get("cves"))
 
@@ -371,7 +438,11 @@ def main() -> int:
     )
 
     body = issue.get("body") or ""
-    hotfix_json = extract_hotfix_json(body)
+    try:
+        hotfix_json = extract_hotfix_json(body)
+    except SystemExit:
+        hotfix_json = extract_hotfix_data_from_legacy_issue(body)
+
     data = normalize_hotfix_data(hotfix_json)
     identity = hotfix_identity(data)
 
