@@ -12,11 +12,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-
-HOTFIX_MARKER_RE = re.compile(
-    r"<!--\s*trivy-hotfix-json:\s*(.*?)\s*-->",
-    re.DOTALL,
-)
+HOTFIX_MARKER_PATTERNS = [
+    re.compile(r"<!--\s*trivy-hotfix-json\s*(?P<json>.*?)\s*-->", re.DOTALL),
+    re.compile(
+        r"<!--\s*trivy-hotfix-json:start\s*-->\s*(?P<json>.*?)\s*<!--\s*trivy-hotfix-json:end\s*-->",
+        re.DOTALL,
+    ),
+    re.compile(r"```trivy-hotfix-json\s*(?P<json>.*?)\s*```", re.DOTALL),
+]
 
 CVE_RE = re.compile(r"^CVE-\d{4}-\d{4,}$")
 SAFE_ID_RE = re.compile(r"[^a-z0-9._-]+")
@@ -39,7 +42,8 @@ def normalize_list(value: Any) -> list[str]:
         return []
 
     if isinstance(value, str):
-        return [value.strip()] if value.strip() else []
+        value = value.strip()
+        return [value] if value else []
 
     if isinstance(value, list):
         result: list[str] = []
@@ -53,21 +57,24 @@ def normalize_list(value: Any) -> list[str]:
 
 
 def extract_hotfix_json(body: str) -> dict[str, Any]:
-    match = HOTFIX_MARKER_RE.search(body or "")
-    if not match:
-        raise SystemExit("Missing trivy-hotfix-json marker in issue body.")
+    for pattern in HOTFIX_MARKER_PATTERNS:
+        match = pattern.search(body or "")
+        if not match:
+            continue
 
-    raw_json = match.group(1).strip()
+        raw_json = match.group("json").strip()
 
-    try:
-        data = json.loads(raw_json)
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid trivy-hotfix-json marker: {exc}") from exc
+        try:
+            data = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
 
-    if not isinstance(data, dict):
-        raise SystemExit("trivy-hotfix-json marker must contain a JSON object.")
+        if not isinstance(data, dict):
+            raise SystemExit("trivy-hotfix-json marker must contain a JSON object.")
 
-    return data
+        return data
+
+    raise SystemExit("Missing or invalid trivy-hotfix-json marker in issue body.")
 
 
 def normalize_hotfix_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -126,6 +133,11 @@ def normalize_hotfix_data(data: dict[str, Any]) -> dict[str, Any]:
     if not packages:
         raise SystemExit("No fixed packages found in trivy-hotfix-json.")
 
+    packages = sorted(
+        packages,
+        key=lambda package: (package["name"], package["fixed_version"], package["installed_version"]),
+    )
+
     return {
         "schema_version": int(data.get("schema_version") or 1),
         "source": str(data.get("source") or "trivy-cve-sync"),
@@ -160,34 +172,6 @@ def build_upgrade_args(packages: list[dict[str, str]]) -> list[str]:
     return sorted(set(args))
 
 
-def write_hotfix_script(
-    path: Path,
-    packages: list[dict[str, str]],
-    *,
-    hotfix_id: str,
-    cves: list[str],
-) -> None:
-    upgrade_args = build_upgrade_args(packages)
-    if not upgrade_args:
-        raise SystemExit("No apk upgrade arguments were generated.")
-
-    package_match_rules = build_package_match_rules(packages)
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "#!/usr/bin/env sh\n"
-        "# generated-by: create-hotfix-pr-from-issue.py\n"
-        f"# hotfix-id: {hotfix_id}\n"
-        f"# hotfix-cves: {','.join(cves)}\n"
-        f"# hotfix-packages: {','.join(package_match_rules)}\n"
-        "set -eu\n"
-        "\n"
-        f"apk add --no-cache --upgrade {' '.join(upgrade_args)}\n",
-        encoding="utf-8",
-    )
-    path.chmod(path.stat().st_mode | 0o111)
-
-
 def build_package_match_rules(packages: list[dict[str, str]]) -> list[str]:
     rules: list[str] = []
 
@@ -203,46 +187,97 @@ def build_package_match_rules(packages: list[dict[str, str]]) -> list[str]:
     return sorted(set(rules))
 
 
-def append_hotfix_to_index(path: Path, entry: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def package_constraint_for_slug(package: dict[str, str]) -> str:
+    name = package["name"].strip()
+    fixed_version = package.get("fixed_version", "").strip()
 
-    hotfix_id = entry["id"]
+    if fixed_version:
+        return f"{name}-to-{fixed_version}"
 
-    if path.exists():
-        content = path.read_text(encoding="utf-8")
-    else:
-        content = "hotfixes:\n"
+    return name
 
-    if (
-        f"id: {hotfix_id}" in content
-        or f'id: "{hotfix_id}"' in content
-        or f"id: '{hotfix_id}'" in content
-    ):
-        print(f"Hotfix {hotfix_id} already exists in {path}, skipping index update.")
-        return
 
-    cves = entry["match"]["cves"]
-    packages = entry["match"]["packages"]
+def hotfix_slug_from_packages(packages: list[dict[str, str]]) -> str:
+    parts = [package_constraint_for_slug(package) for package in packages]
+    return slug("-".join(sorted(parts)))
 
-    block = [
-        f"  - id: {hotfix_id}",
-        f"    file: {entry['file']}",
-        "    match:",
-        "      cves:",
-        *[f"        - {cve}" for cve in cves],
-        "      packages:",
-        *[f"        - {package}" for package in packages],
+
+def hotfix_identity(data: dict[str, Any]) -> dict[str, Any]:
+    package_slug = hotfix_slug_from_packages(data["packages"])
+    hotfix_id = f"apk-upgrade-{package_slug}"
+    script_name = f"{hotfix_id}.sh"
+
+    paths = [
+        str(Path("hotfixes") / "alpine" / alpine_version / script_name)
+        for alpine_version in data["alpine_full_versions"]
     ]
 
-    path.write_text(content.rstrip() + "\n" + "\n".join(block), encoding="utf-8")
+    return {
+        "hotfix_id": hotfix_id,
+        "script_name": script_name,
+        "paths": paths,
+        "alpine_full_versions": data["alpine_full_versions"],
+        "cves": data["cves"],
+        "packages": build_package_match_rules(data["packages"]),
+    }
+
+
+def read_existing_hotfix_cves(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+
+    cves: set[str] = set()
+
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if not line.startswith("# hotfix-cves:"):
+            continue
+
+        value = line.split(":", 1)[1]
+        for cve in value.split(","):
+            cve = cve.strip()
+            if cve:
+                cves.add(cve)
+
+    return sorted(cves)
+
+
+def write_hotfix_script(
+    path: Path,
+    packages: list[dict[str, str]],
+    *,
+    hotfix_id: str,
+    cves: list[str],
+) -> None:
+    upgrade_args = build_upgrade_args(packages)
+    if not upgrade_args:
+        raise SystemExit("No apk upgrade arguments were generated.")
+
+    package_match_rules = build_package_match_rules(packages)
+
+    existing_cves = read_existing_hotfix_cves(path)
+    merged_cves = sorted(set(existing_cves) | set(cves))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/usr/bin/env sh\n"
+        "# generated-by: create-hotfix-pr-from-issue.py\n"
+        f"# hotfix-id: {hotfix_id}\n"
+        f"# hotfix-cves: {','.join(merged_cves)}\n"
+        f"# hotfix-packages: {','.join(package_match_rules)}\n"
+        "set -eu\n"
+        "\n"
+        f"apk add --no-cache --upgrade {' '.join(upgrade_args)}\n",
+        encoding="utf-8",
+    )
+    path.chmod(path.stat().st_mode | 0o111)
 
 
 def generate_hotfix_files(data: dict[str, Any]) -> list[str]:
     changed_files: list[str] = []
 
-    cve_slug = slug("-".join(cve.lower() for cve in data["cves"]))
-    hotfix_id = f"apk-upgrade-{cve_slug}"
-    script_name = f"{hotfix_id}.sh"
+    identity = hotfix_identity(data)
+    hotfix_id = identity["hotfix_id"]
+    script_name = identity["script_name"]
 
     for alpine_version in data["alpine_full_versions"]:
         hotfix_dir = Path("hotfixes") / "alpine" / alpine_version
@@ -306,6 +341,15 @@ def main() -> int:
         default="/tmp/generated-hotfix-pr-body.md",
         help="Write generated PR summary markdown to this file.",
     )
+    parser.add_argument(
+        "--metadata-output",
+        help="Write generated hotfix identity metadata JSON to this file.",
+    )
+    parser.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Only compute metadata and PR body; do not write hotfix files.",
+    )
 
     args = parser.parse_args()
 
@@ -325,7 +369,12 @@ def main() -> int:
     body = issue.get("body") or ""
     hotfix_json = extract_hotfix_json(body)
     data = normalize_hotfix_data(hotfix_json)
-    changed_files = generate_hotfix_files(data)
+    identity = hotfix_identity(data)
+
+    if args.no_write:
+        changed_files = identity["paths"]
+    else:
+        changed_files = generate_hotfix_files(data)
 
     summary = build_pr_summary(str(args.issue), data, changed_files)
     Path(args.output).write_text(summary, encoding="utf-8")
@@ -333,8 +382,15 @@ def main() -> int:
     report = {
         "issue": int(args.issue),
         "data": data,
+        "identity": identity,
         "changed_files": changed_files,
     }
+
+    if args.metadata_output:
+        Path(args.metadata_output).write_text(
+            json.dumps(identity, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
     print(json.dumps(report, indent=2, sort_keys=True))
 
