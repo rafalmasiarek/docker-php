@@ -168,7 +168,10 @@ jobs:
 
             PR_NUMBER="${FOUND_PR_NUMBER}"
             PR_URL="${FOUND_PR_URL}"
-          elif gh pr view "${BRANCH}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          elif gh pr view "${BRANCH}" \
+            --repo "${{ github.repository }}" \
+            --json state \
+            --jq '.state' 2>/dev/null | grep -qx "OPEN"; then
             gh pr edit "${BRANCH}" \
               --repo "${{ github.repository }}" \
               --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
