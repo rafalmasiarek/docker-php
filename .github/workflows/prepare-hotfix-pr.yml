@@ -61,10 +61,17 @@ jobs:
             --issue "${ISSUE_NUMBER}" \
             --output /tmp/generated-hotfix-pr-body.md
 
-          git add hotfixes/
+          # Safety: hotfix PR must not carry generated indexes.
+          find hotfixes -name "index.yaml" -o -name "index.yml" -o -name "index.json" \
+            | while read -r index_file; do
+                git restore --staged --worktree "$index_file" 2>/dev/null || rm -f "$index_file"
+              done
+
+          # Add only hotfix scripts.
+          find hotfixes -type f -name "*.sh" -print0 | xargs -0 -r git add
 
           if git diff --cached --quiet; then
-            echo "No hotfix changes were generated."
+            echo "No hotfix script changes were generated."
             exit 0
           fi
 
