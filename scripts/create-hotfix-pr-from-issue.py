@@ -135,7 +135,11 @@ def normalize_hotfix_data(data: dict[str, Any]) -> dict[str, Any]:
 
     packages = sorted(
         packages,
-        key=lambda package: (package["name"], package["fixed_version"], package["installed_version"]),
+        key=lambda package: (
+            package["name"],
+            package["fixed_version"],
+            package["installed_version"],
+        ),
     )
 
     return {
@@ -192,7 +196,7 @@ def package_constraint_for_slug(package: dict[str, str]) -> str:
     fixed_version = package.get("fixed_version", "").strip()
 
     if fixed_version:
-        return f"{name}-to-{fixed_version}"
+        return f"{name}-{fixed_version}"
 
     return name
 

@@ -19,15 +19,11 @@ def split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def read_script_metadata(script: Path) -> dict[str, Any] | None:
-    """
-    Read only explicit metadata comments from a hotfix script.
+def sorted_unique(values: list[str]) -> list[str]:
+    return sorted({value.strip() for value in values if value.strip()})
 
-    This is intentionally append-only and metadata-only:
-    - no guessing from apk commands,
-    - no backfilling legacy scripts,
-    - no rewriting manually indexed scripts.
-    """
+
+def read_script_metadata(script: Path) -> dict[str, Any] | None:
     hotfix_id = ""
     cves: list[str] = []
     packages: list[str] = []
@@ -64,6 +60,9 @@ def read_script_metadata(script: Path) -> dict[str, Any] | None:
             f"Incomplete hotfix metadata in {script}: missing {', '.join(missing)}"
         )
 
+    cves = sorted_unique(cves)
+    packages = sorted_unique(packages)
+
     for cve in cves:
         if not CVE_RE.fullmatch(cve):
             raise SystemExit(f"Invalid CVE in {script}: {cve}")
@@ -97,12 +96,52 @@ def load_index(index_path: Path) -> dict[str, Any]:
     return data
 
 
-def append_missing_metadata_entries(directory: Path) -> bool:
+def merge_metadata_into_entry(entry: dict[str, Any], metadata: dict[str, Any]) -> bool:
+    changed = False
+
+    if not entry.get("id"):
+        entry["id"] = metadata["id"]
+        changed = True
+
+    if not entry.get("file"):
+        entry["file"] = metadata["file"]
+        changed = True
+
+    match = entry.setdefault("match", {})
+    if not isinstance(match, dict):
+        raise SystemExit(f"Invalid hotfix entry for {metadata['file']}: match must be an object")
+
+    current_cves = match.get("cves") or []
+    current_packages = match.get("packages") or []
+
+    if not isinstance(current_cves, list):
+        raise SystemExit(f"Invalid hotfix entry for {metadata['file']}: match.cves must be a list")
+
+    if not isinstance(current_packages, list):
+        raise SystemExit(f"Invalid hotfix entry for {metadata['file']}: match.packages must be a list")
+
+    merged_cves = sorted_unique([str(cve) for cve in current_cves] + metadata["match"]["cves"])
+    merged_packages = sorted_unique(
+        [str(package) for package in current_packages] + metadata["match"]["packages"]
+    )
+
+    if merged_cves != current_cves:
+        match["cves"] = merged_cves
+        changed = True
+
+    if merged_packages != current_packages:
+        match["packages"] = merged_packages
+        changed = True
+
+    return changed
+
+
+def append_or_update_metadata_entries(directory: Path) -> bool:
     index_path = directory / "index.yaml"
     data = load_index(index_path)
 
-    existing_ids: set[str] = set()
-    existing_files: set[str] = set()
+    by_id: dict[str, dict[str, Any]] = {}
+    by_file: dict[str, dict[str, Any]] = {}
 
     for item in data.get("hotfixes", []):
         if not isinstance(item, dict):
@@ -112,11 +151,12 @@ def append_missing_metadata_entries(directory: Path) -> bool:
         file_name = item.get("file")
 
         if hotfix_id:
-            existing_ids.add(str(hotfix_id))
-        if file_name:
-            existing_files.add(str(file_name))
+            by_id[str(hotfix_id)] = item
 
-    appended: list[dict[str, Any]] = []
+        if file_name:
+            by_file[str(file_name)] = item
+
+    changed = False
 
     for script in sorted(directory.glob("*.sh")):
         metadata = read_script_metadata(script)
@@ -125,20 +165,24 @@ def append_missing_metadata_entries(directory: Path) -> bool:
             print(f"Skipping {script}: no metadata comments")
             continue
 
-        if metadata["id"] in existing_ids:
-            print(f"Skipping {script}: id already indexed")
-            continue
+        existing = by_file.get(metadata["file"]) or by_id.get(metadata["id"])
 
-        if metadata["file"] in existing_files:
-            print(f"Skipping {script}: file already indexed")
+        if existing is not None:
+            if merge_metadata_into_entry(existing, metadata):
+                print(f"Updated {metadata['id']} in {index_path}")
+                changed = True
+            else:
+                print(f"Skipping {script}: already indexed")
             continue
 
         data["hotfixes"].append(metadata)
-        existing_ids.add(metadata["id"])
-        existing_files.add(metadata["file"])
-        appended.append(metadata)
+        by_id[metadata["id"]] = metadata
+        by_file[metadata["file"]] = metadata
+        changed = True
 
-    if not appended:
+        print(f"Appended {metadata['id']} to {index_path}")
+
+    if not changed:
         return False
 
     content = yaml.safe_dump(
@@ -150,15 +194,12 @@ def append_missing_metadata_entries(directory: Path) -> bool:
 
     index_path.write_text(content, encoding="utf-8")
 
-    for item in appended:
-        print(f"Appended {item['id']} to {index_path}")
-
     return True
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Append metadata-based hotfix scripts to index.yaml files."
+        description="Append or update metadata-based hotfix entries in index.yaml files."
     )
     parser.add_argument("--root", default="hotfixes", help="Hotfix root directory.")
     args = parser.parse_args()
@@ -172,7 +213,7 @@ def main() -> int:
     changed = False
 
     for directory in sorted({script.parent for script in root.rglob("*.sh")}):
-        if append_missing_metadata_entries(directory):
+        if append_or_update_metadata_entries(directory):
             changed = True
 
     if not changed:

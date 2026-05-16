@@ -16,7 +16,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: prepare-hotfix-pr-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  group: prepare-hotfix-pr-global
   cancel-in-progress: false
 
 jobs:
