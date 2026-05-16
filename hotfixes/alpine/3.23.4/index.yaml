@@ -1,21 +1,29 @@
 hotfixes:
-  - id: apk-upgrade-cve-2026-27135
-    file: apk-upgrade-cve-2026-27135.sh
-    match:
-      cves:
-        - CVE-2026-27135
-  - id: apk-upgrade-cve-2026-34743
-    file: apk-upgrade-cve-2026-34743.sh
-    match:
-      cves:
-        - CVE-2026-34743
-      packages:
-        - xz-libs<5.8.3-r0
-        - xz<5.8.3-r0
-  - id: apk-upgrade-cve-2026-41254
-    file: apk-upgrade-cve-2026-41254.sh
-    match:
-      cves:
-        - CVE-2026-41254
-      packages:
-        - lcms2<2.19-r0
+- id: apk-upgrade-cve-2026-27135
+  file: apk-upgrade-cve-2026-27135.sh
+  match:
+    cves:
+    - CVE-2026-27135
+- id: apk-upgrade-cve-2026-34743
+  file: apk-upgrade-cve-2026-34743.sh
+  match:
+    cves:
+    - CVE-2026-34743
+    packages:
+    - xz-libs<5.8.3-r0
+    - xz<5.8.3-r0
+- id: apk-upgrade-cve-2026-41254
+  file: apk-upgrade-cve-2026-41254.sh
+  match:
+    cves:
+    - CVE-2026-41254
+    packages:
+    - lcms2<2.19-r0
+- id: apk-upgrade-cve-2026-3805
+  file: apk-upgrade-cve-2026-3805.sh
+  match:
+    cves:
+    - CVE-2026-3805
+    packages:
+    - curl<8.19.0-r0
+    - libcurl<8.19.0-r0
