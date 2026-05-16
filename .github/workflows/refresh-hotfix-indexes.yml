@@ -1,0 +1,58 @@
+name: refresh-hotfix-indexes
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "hotfixes/**/*.sh"
+      - "scripts/refresh-hotfix-indexes.py"
+      - ".github/workflows/refresh-hotfix-indexes.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-hotfix-indexes-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: refresh hotfix indexes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user PyYAML
+
+      - name: Regenerate hotfix indexes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/refresh-hotfix-indexes.py --root hotfixes
+
+      - name: Commit refreshed indexes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -u hotfixes
+          find hotfixes -type f -name "index.yaml" -print0 | xargs -0 -r git add
+
+          if git diff --cached --quiet; then
+            echo "Hotfix indexes are already up to date."
+            exit 0
+          fi
+
+          git commit -m "chore(hotfix): refresh indexes"
+          git push origin HEAD:main
