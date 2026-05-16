@@ -105,28 +105,68 @@ def extract_hotfix_data_from_legacy_issue(body: str) -> dict[str, Any]:
 
     packages: list[dict[str, str]] = []
 
+    def add_package(name: str, installed_version: str, fixed_version: str) -> None:
+        name = name.strip()
+        installed_version = installed_version.strip()
+        fixed_version = fixed_version.strip()
+
+        if not re.match(r"^[a-z0-9][a-z0-9+_.-]*$", name, re.IGNORECASE):
+            return
+
+        if fixed_version.lower() in {"unknown", "none", "n/a"}:
+            return
+
+        if not re.search(r"\d", fixed_version):
+            return
+
+        item = {
+            "name": name,
+            "installed_version": installed_version,
+            "fixed_version": fixed_version,
+        }
+
+        if item not in packages:
+            packages.append(item)
+
+    # Format rendered/plain:
+    # `curl` `8.17.0-r1` `8.19.0-r0`
     for name, installed_version, fixed_version in re.findall(
         r"`([^`]+)`\s+`([^`]+)`\s+`([^`]+)`",
         body,
     ):
-        if not re.match(r"^[a-z0-9][a-z0-9+_.-]*$", name, re.IGNORECASE):
+        add_package(name, installed_version, fixed_version)
+
+    # Markdown table format:
+    # | `curl` | `8.17.0-r1` | `8.19.0-r0` |
+    for line in body.splitlines():
+        stripped = line.strip()
+
+        if not stripped.startswith("|"):
             continue
 
-        if fixed_version.lower() in {"unknown", "none", "n/a"}:
+        cells = [
+            cell.strip().strip("`").strip()
+            for cell in stripped.strip("|").split("|")
+        ]
+
+        if len(cells) < 3:
             continue
 
-        if not re.search(r"\d", fixed_version):
+        name, installed_version, fixed_version = cells[:3]
+
+        if name.lower() in {"package", "packages"}:
             continue
 
-        packages.append(
-            {
-                "name": name,
-                "installed_version": installed_version,
-                "fixed_version": fixed_version,
-            }
-        )
+        if set(name) <= {"-", ":"}:
+            continue
+
+        add_package(name, installed_version, fixed_version)
 
     if not cves or not alpine_full_versions or not packages:
+        print("Legacy issue parser failed.", flush=True)
+        print(f"CVEs found: {cves}", flush=True)
+        print(f"Alpine versions found: {alpine_full_versions}", flush=True)
+        print(f"Packages found: {packages}", flush=True)
         raise SystemExit("Missing or invalid trivy-hotfix-json marker in issue body.")
 
     return {
