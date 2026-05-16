@@ -162,16 +162,53 @@ jobs:
           git push --force-with-lease origin "${BRANCH}"
 
           if [ -n "${FOUND_PR_NUMBER}" ]; then
-            gh pr comment "${FOUND_PR_NUMBER}" \
+            PR_NUMBER="${FOUND_PR_NUMBER}"
+            PR_URL="${FOUND_PR_URL}"
+
+            gh pr view "${PR_NUMBER}" \
+              --repo "${{ github.repository }}" \
+              --json title,body \
+              --jq '.body // ""' > /tmp/existing-pr-body.md
+
+            ISSUE_REF="#${ISSUE_NUMBER}"
+
+            if ! grep -qF "${ISSUE_REF}" /tmp/existing-pr-body.md; then
+              {
+                cat /tmp/existing-pr-body.md
+                echo
+                echo "## Additional remediation issues"
+                echo
+                echo "Fixes ${ISSUE_REF}"
+              } > /tmp/updated-pr-body.md
+            else
+              cp /tmp/existing-pr-body.md /tmp/updated-pr-body.md
+            fi
+
+            ISSUE_LIST="$(
+              {
+                gh pr view "${PR_NUMBER}" \
+                  --repo "${{ github.repository }}" \
+                  --json title,body \
+                  --jq '[.title, .body] | join(" ")' \
+                  | grep -oE '#[0-9]+' || true
+                echo "${ISSUE_REF}"
+              } | sort -Vu | awk 'BEGIN { sep="" } { printf "%s%s", sep, $0; sep=", " } END { print "" }'
+            )"
+
+            gh pr edit "${PR_NUMBER}" \
+              --repo "${{ github.repository }}" \
+              --title "fix(hotfix): add remediation for issues ${ISSUE_LIST}" \
+              --body-file /tmp/updated-pr-body.md
+
+            gh pr comment "${PR_NUMBER}" \
               --repo "${{ github.repository }}" \
               --body "Added remediation metadata for issue #${ISSUE_NUMBER} to this existing hotfix PR."
 
-            PR_NUMBER="${FOUND_PR_NUMBER}"
-            PR_URL="${FOUND_PR_URL}"
           elif gh pr view "${BRANCH}" \
             --repo "${{ github.repository }}" \
             --json state \
             --jq '.state' 2>/dev/null | grep -qx "OPEN"; then
+
             gh pr edit "${BRANCH}" \
               --repo "${{ github.repository }}" \
               --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
@@ -179,6 +216,7 @@ jobs:
 
             PR_NUMBER="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')"
             PR_URL="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json url --jq '.url')"
+
           else
             PR_URL="$(
               gh pr create \
