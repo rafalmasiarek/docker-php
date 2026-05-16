@@ -7,7 +7,10 @@ on:
     paths:
       - "versions/**"
       - "rootfs/**"
-      - "hotfixes/**"
+      - "hotfixes/**/*.sh"
+      - "hotfixes/**/index.yaml"
+      - "hotfixes/**/index.yml"
+      - "hotfixes/**/index.json"
       - "build-php-images-sanity.yaml"
       - ".github/workflows/build-and-test-new-php-versions.yml"
   push:
@@ -17,7 +20,10 @@ on:
     paths:
       - "versions/**"
       - "rootfs/**"
-      - "hotfixes/**"
+      - "hotfixes/**/*.sh"
+      - "hotfixes/**/index.yaml"
+      - "hotfixes/**/index.yml"
+      - "hotfixes/**/index.json"
       - "build-php-images-sanity.yaml"
       - ".github/workflows/build-and-test-new-php-versions.yml"
 
