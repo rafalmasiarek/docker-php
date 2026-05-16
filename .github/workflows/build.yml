@@ -6,7 +6,9 @@ on:
     paths:
       - "versions/**"
       - "rootfs/**"
-      - "hotfixes/**"
+      - "hotfixes/**/index.yaml"
+      - "hotfixes/**/index.yml"
+      - "hotfixes/**/index.json"
       - "scripts/compute-tags.sh"
       - ".github/workflows/build.yml"
   schedule:
