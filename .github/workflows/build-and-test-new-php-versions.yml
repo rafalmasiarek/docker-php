@@ -412,6 +412,13 @@ jobs:
             printf 'image_minor=%s\n' "$IMAGE_ALPINE_MINOR"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Regenerate hotfix indexes in workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user PyYAML
+          python3 scripts/refresh-hotfix-indexes.py --root hotfixes
+
       - name: Select matching hotfixes
         id: hotfixes
         shell: bash
