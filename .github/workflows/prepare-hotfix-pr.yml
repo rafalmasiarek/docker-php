@@ -178,7 +178,8 @@ jobs:
                 echo
                 echo "## Additional remediation issues"
                 echo
-                echo "Fixes ${ISSUE_REF}"
+                # temporary diable auto-close issue due to scan after image build
+                # echo "Fixes ${ISSUE_REF}"
               } > /tmp/updated-pr-body.md
             else
               cp /tmp/existing-pr-body.md /tmp/updated-pr-body.md
