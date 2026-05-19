@@ -41,3 +41,16 @@ hotfixes:
     packages:
     - curl<8.19.0-r0
     - libcurl<8.19.0-r0
+- id: apk-upgrade-libecpg-18.4-r0-libpq-18.4-r0
+  file: apk-upgrade-libecpg-18.4-r0-libpq-18.4-r0.sh
+  match:
+    cves:
+    - CVE-2026-6472
+    - CVE-2026-6473
+    - CVE-2026-6476
+    - CVE-2026-6478
+    - CVE-2026-6575
+    - CVE-2026-6638
+    packages:
+    - libecpg<18.4-r0
+    - libpq<18.4-r0
