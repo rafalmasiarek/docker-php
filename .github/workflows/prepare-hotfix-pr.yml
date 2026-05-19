@@ -143,6 +143,66 @@ jobs:
             fi
           done
 
+          sanitize_pr_body() {
+            local input_file="$1"
+            local output_file="$2"
+
+            sed -E \
+              -e '/^[[:space:]]*(Fixes|Closes|Resolves)[[:space:]]+#[0-9]+[[:space:]]*$/Id' \
+              -e '/^## Additional remediation issues[[:space:]]*$/Id' \
+              -e '/^[[:space:]]*$/N;/^\n$/D' \
+              "${input_file}" > "${output_file}"
+          }
+
+          build_remediation_issue_list() {
+            local current_issue_ref="#${ISSUE_NUMBER}"
+
+            {
+              if [ -n "${FOUND_PR_NUMBER}" ]; then
+                gh pr view "${FOUND_PR_NUMBER}" \
+                  --repo "${{ github.repository }}" \
+                  --json title,body \
+                  --jq '[.title, .body] | join(" ")' \
+                  | grep -oE '#[0-9]+' || true
+              fi
+
+              grep -oE '#[0-9]+' /tmp/generated-hotfix-pr-body.md || true
+              echo "${current_issue_ref}"
+            } | sort -Vu
+          }
+
+          build_pr_body() {
+            local input_file="$1"
+            local output_file="$2"
+
+            sanitize_pr_body "${input_file}" /tmp/pr-body-sanitized.md
+
+            issue_list_lines="$(
+              build_remediation_issue_list | sed 's/^/- /'
+            )"
+
+            awk '
+              NR == 1 && /^Adds an Alpine hotfix generated from security issue #[0-9]+\.$/ {
+                print "Adds Alpine hotfix remediation generated from these security issues:"
+                next
+              }
+              { print }
+            ' /tmp/pr-body-sanitized.md > /tmp/pr-body-with-summary.md
+
+            {
+              cat /tmp/pr-body-with-summary.md
+              echo
+              echo "## Remediation issues"
+              echo
+              printf '%s\n' "${issue_list_lines}"
+            } > "${output_file}"
+          }
+
+          build_issue_title_list() {
+            build_remediation_issue_list \
+              | awk 'BEGIN { sep="" } { printf "%s%s", sep, $0; sep=", " } END { print "" }'
+          }
+
           if git diff --cached --quiet; then
             echo "No hotfix script changes were generated."
 
@@ -170,31 +230,8 @@ jobs:
               --json title,body \
               --jq '.body // ""' > /tmp/existing-pr-body.md
 
-            ISSUE_REF="#${ISSUE_NUMBER}"
-
-            if ! grep -qF "${ISSUE_REF}" /tmp/existing-pr-body.md; then
-              {
-                cat /tmp/existing-pr-body.md
-                echo
-                echo "## Additional remediation issues"
-                echo
-                # temporary diable auto-close issue due to scan after image build
-                # echo "Fixes ${ISSUE_REF}"
-              } > /tmp/updated-pr-body.md
-            else
-              cp /tmp/existing-pr-body.md /tmp/updated-pr-body.md
-            fi
-
-            ISSUE_LIST="$(
-              {
-                gh pr view "${PR_NUMBER}" \
-                  --repo "${{ github.repository }}" \
-                  --json title,body \
-                  --jq '[.title, .body] | join(" ")' \
-                  | grep -oE '#[0-9]+' || true
-                echo "${ISSUE_REF}"
-              } | sort -Vu | awk 'BEGIN { sep="" } { printf "%s%s", sep, $0; sep=", " } END { print "" }'
-            )"
+            build_pr_body /tmp/existing-pr-body.md /tmp/updated-pr-body.md
+            ISSUE_LIST="$(build_issue_title_list)"
 
             gh pr edit "${PR_NUMBER}" \
               --repo "${{ github.repository }}" \
@@ -210,22 +247,28 @@ jobs:
             --json state \
             --jq '.state' 2>/dev/null | grep -qx "OPEN"; then
 
+            build_pr_body /tmp/generated-hotfix-pr-body.md /tmp/updated-pr-body.md
+            ISSUE_LIST="$(build_issue_title_list)"
+
             gh pr edit "${BRANCH}" \
               --repo "${{ github.repository }}" \
-              --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
-              --body-file /tmp/generated-hotfix-pr-body.md
+              --title "fix(hotfix): add remediation for issues ${ISSUE_LIST}" \
+              --body-file /tmp/updated-pr-body.md
 
             PR_NUMBER="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')"
             PR_URL="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json url --jq '.url')"
 
           else
+            build_pr_body /tmp/generated-hotfix-pr-body.md /tmp/updated-pr-body.md
+            ISSUE_LIST="$(build_issue_title_list)"
+
             PR_URL="$(
               gh pr create \
                 --repo "${{ github.repository }}" \
                 --base "${DEFAULT_BRANCH}" \
                 --head "${BRANCH}" \
-                --title "fix(hotfix): add remediation for issue #${ISSUE_NUMBER}" \
-                --body-file /tmp/generated-hotfix-pr-body.md
+                --title "fix(hotfix): add remediation for issues ${ISSUE_LIST}" \
+                --body-file /tmp/updated-pr-body.md
             )"
 
             PR_NUMBER="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')"
