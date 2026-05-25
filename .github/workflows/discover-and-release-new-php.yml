@@ -229,6 +229,7 @@ jobs:
         if: steps.discover.outputs.new_php != ''
         uses: peter-evans/create-pull-request@v8
         with:
+          token: ${{ secrets.ACTIONS_PAT }}
           commit-message: "chore(versions): add PHP ${{ steps.discover.outputs.new_php }}"
           title: "chore: add PHP ${{ steps.discover.outputs.new_php }}"
           body: |

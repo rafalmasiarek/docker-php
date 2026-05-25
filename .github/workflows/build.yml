@@ -1873,6 +1873,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          token: ${{ secrets.ACTIONS_PAT }}
 
       - name: Download image metadata artifacts
         if: needs.discover.outputs.count != '0'
