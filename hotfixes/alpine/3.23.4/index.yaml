@@ -54,3 +54,10 @@ hotfixes:
     packages:
     - libecpg<18.4-r0
     - libpq<18.4-r0
+- id: apk-upgrade-libpng-1.6.58-r1
+  file: apk-upgrade-libpng-1.6.58-r1.sh
+  match:
+    cves:
+    - CVE-2026-40930
+    packages:
+    - libpng<1.6.58-r1
