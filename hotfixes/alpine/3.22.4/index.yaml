@@ -38,3 +38,10 @@ hotfixes:
     - CVE-2026-6732
     packages:
     - libxml2<2.13.9-r1
+- id: apk-upgrade-libssh2-1.11.1-r1
+  file: apk-upgrade-libssh2-1.11.1-r1.sh
+  match:
+    cves:
+    - CVE-2026-7598
+    packages:
+    - libssh2<1.11.1-r1
