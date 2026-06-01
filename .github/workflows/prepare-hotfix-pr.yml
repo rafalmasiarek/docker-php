@@ -1,13 +1,16 @@
 name: prepare-hotfix-pr
 
 on:
-  issues:
-    types: [opened, edited, labeled]
+  workflow_run:
+    workflows: ["build-php-images"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       issue_number:
-        description: "Issue number to generate a hotfix PR from"
-        required: true
+        description: "Issue number to generate a hotfix PR from. Empty = all open security/trivy issues."
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -17,18 +20,19 @@ permissions:
 
 concurrency:
   group: prepare-hotfix-pr-global
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   prepare:
     name: prepare hotfix pull request
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'workflow_dispatch' || (
-        contains(github.event.issue.labels.*.name, 'security') &&
-        contains(github.event.issue.labels.*.name, 'trivy')
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.name == 'build-php-images' &&
+        github.event.workflow_run.head_branch == 'main'
       )
-
     steps:
       - uses: actions/checkout@v6
         with:
@@ -45,109 +49,92 @@ jobs:
         id: hotfix_pr
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_PAT }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || '' }}
         shell: bash
         run: |
           set -euo pipefail
 
           DEFAULT_BRANCH="main"
-          NEW_BRANCH="hotfix/security-issue-${ISSUE_NUMBER}"
+          WORKDIR="/tmp/hotfix-pr"
+          GROUPS_DIR="${WORKDIR}/groups"
+          ISSUES_FILE="${WORKDIR}/issues.txt"
+          OPEN_PRS_FILE="${WORKDIR}/open-prs.txt"
+
+          rm -rf "${WORKDIR}"
+          mkdir -p "${GROUPS_DIR}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git fetch origin "${DEFAULT_BRANCH}"
-          git checkout -B "${NEW_BRANCH}" "origin/${DEFAULT_BRANCH}"
 
-          python3 scripts/create-hotfix-pr-from-issue.py \
-            --repo "${{ github.repository }}" \
-            --issue "${ISSUE_NUMBER}" \
-            --output /tmp/generated-hotfix-pr-body.md \
-            --metadata-output /tmp/hotfix-metadata.json \
-            --no-write
+          if [ -n "${ISSUE_NUMBER:-}" ]; then
+            printf '%s\n' "${ISSUE_NUMBER}" > "${ISSUES_FILE}"
+          else
+            gh issue list \
+              --repo "${{ github.repository }}" \
+              --state open \
+              --label security \
+              --label trivy \
+              --limit 200 \
+              --json number \
+              --jq '.[].number' > "${ISSUES_FILE}"
+          fi
 
-          mapfile -t HOTFIX_PATHS < <(jq -r '.paths[]' /tmp/hotfix-metadata.json)
-          HOTFIX_ID="$(jq -r '.hotfix_id' /tmp/hotfix-metadata.json)"
+          if [ ! -s "${ISSUES_FILE}" ]; then
+            echo "No security/trivy issues selected."
+            exit 0
+          fi
 
-          echo "HOTFIX_ID=${HOTFIX_ID}"
-          echo "Expected hotfix files:"
-          printf ' - %s\n' "${HOTFIX_PATHS[@]}"
-
-          FOUND_PR_NUMBER=""
-          FOUND_PR_BRANCH=""
-          FOUND_PR_URL=""
+          echo "Selected issues:"
+          cat "${ISSUES_FILE}"
 
           gh pr list \
             --repo "${{ github.repository }}" \
             --state open \
             --base "${DEFAULT_BRANCH}" \
             --json number,headRefName,url \
-            --jq '.[] | @base64' > /tmp/open-prs.txt
+            --jq '.[] | @base64' > "${OPEN_PRS_FILE}"
 
-          while read -r encoded; do
-            [ -z "${encoded}" ] && continue
+          while read -r selected_issue; do
+            [ -z "${selected_issue}" ] && continue
 
-            pr_json="$(printf '%s' "${encoded}" | base64 -d)"
-            pr_number="$(printf '%s' "${pr_json}" | jq -r '.number')"
-            pr_branch="$(printf '%s' "${pr_json}" | jq -r '.headRefName')"
-            pr_url="$(printf '%s' "${pr_json}" | jq -r '.url')"
+            echo "Inspecting issue #${selected_issue}"
 
-            case "${pr_branch}" in
-              hotfix/security-issue-*) ;;
-              *) continue ;;
-            esac
+            python3 scripts/create-hotfix-pr-from-issue.py \
+              --repo "${{ github.repository }}" \
+              --issue "${selected_issue}" \
+              --output "${WORKDIR}/issue-${selected_issue}-body.md" \
+              --metadata-output "${WORKDIR}/issue-${selected_issue}-metadata.json" \
+              --no-write
 
-            if [ "${pr_branch}" = "${NEW_BRANCH}" ]; then
-              continue
+            hotfix_id="$(jq -r '.hotfix_id // empty' "${WORKDIR}/issue-${selected_issue}-metadata.json")"
+
+            if [ -z "${hotfix_id}" ]; then
+              hotfix_id="$(jq -r '.paths[0] // empty' "${WORKDIR}/issue-${selected_issue}-metadata.json" | sed -E 's#[^a-zA-Z0-9._-]+#-#g; s#^-+##; s#-+$##')"
             fi
 
-            git fetch --quiet origin "${pr_branch}" || continue
-
-            for hotfix_path in "${HOTFIX_PATHS[@]}"; do
-              if git cat-file -e "origin/${pr_branch}:${hotfix_path}" 2>/dev/null; then
-                FOUND_PR_NUMBER="${pr_number}"
-                FOUND_PR_BRANCH="${pr_branch}"
-                FOUND_PR_URL="${pr_url}"
-                break 2
-              fi
-            done
-          done < /tmp/open-prs.txt
-
-          if [ -n "${FOUND_PR_BRANCH}" ]; then
-            BRANCH="${FOUND_PR_BRANCH}"
-            echo "Found existing hotfix PR #${FOUND_PR_NUMBER} on branch ${BRANCH} for ${HOTFIX_ID}."
-            git checkout -B "${BRANCH}" "origin/${BRANCH}"
-          else
-            BRANCH="${NEW_BRANCH}"
-            echo "No existing hotfix PR found for ${HOTFIX_ID}. Creating/updating ${BRANCH}."
-            git checkout -B "${BRANCH}" "origin/${DEFAULT_BRANCH}"
-          fi
-
-          python3 scripts/create-hotfix-pr-from-issue.py \
-            --repo "${{ github.repository }}" \
-            --issue "${ISSUE_NUMBER}" \
-            --output /tmp/generated-hotfix-pr-body.md \
-            --metadata-output /tmp/hotfix-metadata.json
-
-          mapfile -t HOTFIX_PATHS < <(jq -r '.paths[]' /tmp/hotfix-metadata.json)
-
-          if [ -d hotfixes ]; then
-            find hotfixes \( -name "index.yaml" -o -name "index.yml" -o -name "index.json" \) -print \
-              | while read -r index_file; do
-                  git restore --staged --worktree "$index_file" 2>/dev/null || rm -f "$index_file"
-                done
-          fi
-
-          for hotfix_path in "${HOTFIX_PATHS[@]}"; do
-            if [ -f "${hotfix_path}" ]; then
-              git add "${hotfix_path}"
+            if [ -z "${hotfix_id}" ]; then
+              hotfix_id="issue-${selected_issue}"
             fi
-          done
+
+            safe_hotfix_id="$(printf '%s' "${hotfix_id}" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._-]+#-#g; s#^-+##; s#-+$##')"
+
+            if [ -z "${safe_hotfix_id}" ]; then
+              safe_hotfix_id="issue-${selected_issue}"
+            fi
+
+            printf '%s\n' "${selected_issue}" >> "${GROUPS_DIR}/${safe_hotfix_id}.issues"
+            cp "${WORKDIR}/issue-${selected_issue}-metadata.json" "${GROUPS_DIR}/${safe_hotfix_id}.metadata.json"
+          done < "${ISSUES_FILE}"
+
+          if ! ls "${GROUPS_DIR}"/*.issues >/dev/null 2>&1; then
+            echo "No hotfix groups were generated."
+            exit 0
+          fi
 
           sanitize_pr_body() {
             local input_file="$1"
             local output_file="$2"
-
             sed -E \
               -e '/^[[:space:]]*(Fixes|Closes|Resolves)[[:space:]]+#[0-9]+[[:space:]]*$/Id' \
               -e '/^## Additional remediation issues[[:space:]]*$/Id' \
@@ -156,30 +143,36 @@ jobs:
           }
 
           build_remediation_issue_list() {
-            local current_issue_ref="#${ISSUE_NUMBER}"
-
+            local group_file="$1"
+            local found_pr_number="$2"
             {
-              if [ -n "${FOUND_PR_NUMBER}" ]; then
-                gh pr view "${FOUND_PR_NUMBER}" \
+              if [ -n "${found_pr_number}" ]; then
+                gh pr view "${found_pr_number}" \
                   --repo "${{ github.repository }}" \
                   --json title,body \
                   --jq '[.title, .body] | join(" ")' \
                   | grep -oE '#[0-9]+' || true
               fi
 
-              grep -oE '#[0-9]+' /tmp/generated-hotfix-pr-body.md || true
-              echo "${current_issue_ref}"
+              while read -r grouped_issue; do
+                [ -z "${grouped_issue}" ] && continue
+                echo "#${grouped_issue}"
+              done < "${group_file}"
             } | sort -Vu
           }
 
           build_pr_body() {
-            local input_file="$1"
+            local first_body_file="$1"
             local output_file="$2"
+            local group_file="$3"
+            local found_pr_number="$4"
+            local sanitized_file="${WORKDIR}/pr-body-sanitized.md"
+            local with_summary_file="${WORKDIR}/pr-body-with-summary.md"
 
-            sanitize_pr_body "${input_file}" /tmp/pr-body-sanitized.md
+            sanitize_pr_body "${first_body_file}" "${sanitized_file}"
 
             issue_list_lines="$(
-              build_remediation_issue_list | sed 's/^/- /'
+              build_remediation_issue_list "${group_file}" "${found_pr_number}" | sed 's/^/- /'
             )"
 
             awk '
@@ -188,10 +181,10 @@ jobs:
                 next
               }
               { print }
-            ' /tmp/pr-body-sanitized.md > /tmp/pr-body-with-summary.md
+            ' "${sanitized_file}" > "${with_summary_file}"
 
             {
-              cat /tmp/pr-body-with-summary.md
+              cat "${with_summary_file}"
               echo
               echo "## Remediation issues"
               echo
@@ -200,104 +193,216 @@ jobs:
           }
 
           build_issue_title_list() {
-            build_remediation_issue_list \
+            local group_file="$1"
+            local found_pr_number="$2"
+            build_remediation_issue_list "${group_file}" "${found_pr_number}" \
               | awk 'BEGIN { sep="" } { printf "%s%s", sep, $0; sep=", " } END { print "" }'
           }
 
-          if git diff --cached --quiet; then
-            echo "No hotfix script changes were generated."
+          find_existing_hotfix_pr() {
+            local branch="$1"
+            shift
+            local paths=("$@")
 
-            if [ -n "${FOUND_PR_NUMBER}" ]; then
-              {
-                echo "pr_number=${FOUND_PR_NUMBER}"
-                echo "pr_url=${FOUND_PR_URL}"
-                echo "branch=${BRANCH}"
-              } >> "$GITHUB_OUTPUT"
+            FOUND_PR_NUMBER=""
+            FOUND_PR_BRANCH=""
+            FOUND_PR_URL=""
+
+            if gh pr view "${branch}" \
+              --repo "${{ github.repository }}" \
+              --json number,headRefName,url,state \
+              --jq 'select(.state == "OPEN") | @base64' > "${WORKDIR}/branch-pr.txt" 2>/dev/null && [ -s "${WORKDIR}/branch-pr.txt" ]; then
+              local pr_json
+              pr_json="$(base64 -d "${WORKDIR}/branch-pr.txt")"
+              FOUND_PR_NUMBER="$(printf '%s' "${pr_json}" | jq -r '.number')"
+              FOUND_PR_BRANCH="$(printf '%s' "${pr_json}" | jq -r '.headRefName')"
+              FOUND_PR_URL="$(printf '%s' "${pr_json}" | jq -r '.url')"
+              return 0
             fi
 
-            exit 0
-          fi
+            while read -r encoded; do
+              [ -z "${encoded}" ] && continue
 
-          git commit -m "fix(hotfix): update remediation for issue #${ISSUE_NUMBER}"
+              local pr_json pr_number pr_branch pr_url
+              pr_json="$(printf '%s' "${encoded}" | base64 -d)"
+              pr_number="$(printf '%s' "${pr_json}" | jq -r '.number')"
+              pr_branch="$(printf '%s' "${pr_json}" | jq -r '.headRefName')"
+              pr_url="$(printf '%s' "${pr_json}" | jq -r '.url')"
 
-          git push --force-with-lease origin "${BRANCH}"
+              case "${pr_branch}" in
+                hotfix/*) ;;
+                *) continue ;;
+              esac
 
-          if [ -n "${FOUND_PR_NUMBER}" ]; then
-            PR_NUMBER="${FOUND_PR_NUMBER}"
-            PR_URL="${FOUND_PR_URL}"
+              if [ "${pr_branch}" = "${branch}" ]; then
+                continue
+              fi
 
-            gh pr view "${PR_NUMBER}" \
-              --repo "${{ github.repository }}" \
-              --json title,body \
-              --jq '.body // ""' > /tmp/existing-pr-body.md
+              git fetch --quiet origin "${pr_branch}" || continue
 
-            build_pr_body /tmp/existing-pr-body.md /tmp/updated-pr-body.md
-            ISSUE_LIST="$(build_issue_title_list)"
+              for hotfix_path in "${paths[@]}"; do
+                if git cat-file -e "origin/${pr_branch}:${hotfix_path}" 2>/dev/null; then
+                  FOUND_PR_NUMBER="${pr_number}"
+                  FOUND_PR_BRANCH="${pr_branch}"
+                  FOUND_PR_URL="${pr_url}"
+                  return 0
+                fi
+              done
+            done < "${OPEN_PRS_FILE}"
 
-            gh pr edit "${PR_NUMBER}" \
-              --repo "${{ github.repository }}" \
-              --title "fix(hotfix): add remediation for issues ${ISSUE_LIST}" \
-              --body-file /tmp/updated-pr-body.md
+            return 1
+          }
 
-            gh pr comment "${PR_NUMBER}" \
-              --repo "${{ github.repository }}" \
-              --body "Added remediation metadata for issue #${ISSUE_NUMBER} to this existing hotfix PR."
+          ALL_RESULTS_FILE="${WORKDIR}/results.txt"
+          : > "${ALL_RESULTS_FILE}"
 
-          elif gh pr view "${BRANCH}" \
-            --repo "${{ github.repository }}" \
-            --json state \
-            --jq '.state' 2>/dev/null | grep -qx "OPEN"; then
+          for group_file in "${GROUPS_DIR}"/*.issues; do
+            [ -e "${group_file}" ] || continue
 
-            build_pr_body /tmp/generated-hotfix-pr-body.md /tmp/updated-pr-body.md
-            ISSUE_LIST="$(build_issue_title_list)"
+            hotfix_id="$(basename "${group_file}" .issues)"
+            branch="hotfix/${hotfix_id}"
 
-            gh pr edit "${BRANCH}" \
-              --repo "${{ github.repository }}" \
-              --title "fix(hotfix): add remediation for issues ${ISSUE_LIST}" \
-              --body-file /tmp/updated-pr-body.md
+            echo "::group::Hotfix group ${hotfix_id}"
+            echo "Issues in group:"
+            cat "${group_file}"
 
-            PR_NUMBER="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')"
-            PR_URL="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json url --jq '.url')"
+            mapfile -t first_paths < <(jq -r '.paths[]' "${GROUPS_DIR}/${hotfix_id}.metadata.json")
 
-          else
-            build_pr_body /tmp/generated-hotfix-pr-body.md /tmp/updated-pr-body.md
-            ISSUE_LIST="$(build_issue_title_list)"
+            find_existing_hotfix_pr "${branch}" "${first_paths[@]}" || true
 
-            PR_URL="$(
-              gh pr create \
+            if [ -n "${FOUND_PR_BRANCH}" ]; then
+              branch="${FOUND_PR_BRANCH}"
+              echo "Found existing hotfix PR #${FOUND_PR_NUMBER} on branch ${branch} for ${hotfix_id}."
+              git checkout -B "${branch}" "origin/${branch}"
+            else
+              echo "No existing hotfix PR found for ${hotfix_id}. Creating/updating ${branch}."
+              git checkout -B "${branch}" "origin/${DEFAULT_BRANCH}"
+            fi
+
+            all_hotfix_paths_file="${WORKDIR}/${hotfix_id}-paths.txt"
+            : > "${all_hotfix_paths_file}"
+            first_issue=""
+
+            while read -r grouped_issue; do
+              [ -z "${grouped_issue}" ] && continue
+
+              if [ -z "${first_issue}" ]; then
+                first_issue="${grouped_issue}"
+              fi
+
+              echo "Generating remediation from issue #${grouped_issue}"
+
+              python3 scripts/create-hotfix-pr-from-issue.py \
                 --repo "${{ github.repository }}" \
-                --base "${DEFAULT_BRANCH}" \
-                --head "${BRANCH}" \
-                --title "fix(hotfix): add remediation for issues ${ISSUE_LIST}" \
-                --body-file /tmp/updated-pr-body.md
-            )"
+                --issue "${grouped_issue}" \
+                --output "${WORKDIR}/issue-${grouped_issue}-body.md" \
+                --metadata-output "${WORKDIR}/issue-${grouped_issue}-metadata.json"
 
-            PR_NUMBER="$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')"
+              jq -r '.paths[]' "${WORKDIR}/issue-${grouped_issue}-metadata.json" >> "${all_hotfix_paths_file}"
+            done < "${group_file}"
+
+            if [ -d hotfixes ]; then
+              find hotfixes \( -name "index.yaml" -o -name "index.yml" -o -name "index.json" \) -print \
+                | while read -r index_file; do
+                  git restore --staged --worktree "${index_file}" 2>/dev/null || rm -f "${index_file}"
+                done
+            fi
+
+            sort -u "${all_hotfix_paths_file}" | while read -r hotfix_path; do
+              if [ -f "${hotfix_path}" ]; then
+                git add "${hotfix_path}"
+              fi
+            done
+
+            if git diff --cached --quiet; then
+              echo "No hotfix script changes were generated for ${hotfix_id}."
+              if [ -n "${FOUND_PR_NUMBER}" ]; then
+                while read -r grouped_issue; do
+                  [ -z "${grouped_issue}" ] && continue
+                  printf '%s\t%s\t%s\n' "${grouped_issue}" "${FOUND_PR_NUMBER}" "${FOUND_PR_URL}" >> "${ALL_RESULTS_FILE}"
+                done < "${group_file}"
+              fi
+              echo "::endgroup::"
+              continue
+            fi
+
+            git commit -m "fix(hotfix): update remediation for ${hotfix_id}"
+            git push --force-with-lease origin "${branch}"
+
+            updated_body_file="${WORKDIR}/${hotfix_id}-pr-body.md"
+            issue_list="$(build_issue_title_list "${group_file}" "${FOUND_PR_NUMBER}")"
+
+            if [ -n "${FOUND_PR_NUMBER}" ]; then
+              pr_number="${FOUND_PR_NUMBER}"
+              pr_url="${FOUND_PR_URL}"
+
+              gh pr view "${pr_number}" \
+                --repo "${{ github.repository }}" \
+                --json title,body \
+                --jq '.body // ""' > "${WORKDIR}/${hotfix_id}-existing-pr-body.md"
+
+              build_pr_body "${WORKDIR}/${hotfix_id}-existing-pr-body.md" "${updated_body_file}" "${group_file}" "${FOUND_PR_NUMBER}"
+
+              gh pr edit "${pr_number}" \
+                --repo "${{ github.repository }}" \
+                --title "fix(hotfix): add remediation for issues ${issue_list}" \
+                --body-file "${updated_body_file}"
+
+              gh pr comment "${pr_number}" \
+                --repo "${{ github.repository }}" \
+                --body "Added remediation metadata for issues ${issue_list} to this existing hotfix PR."
+            elif gh pr view "${branch}" \
+              --repo "${{ github.repository }}" \
+              --json state \
+              --jq '.state' 2>/dev/null | grep -qx "OPEN"; then
+              build_pr_body "${WORKDIR}/issue-${first_issue}-body.md" "${updated_body_file}" "${group_file}" ""
+
+              gh pr edit "${branch}" \
+                --repo "${{ github.repository }}" \
+                --title "fix(hotfix): add remediation for issues ${issue_list}" \
+                --body-file "${updated_body_file}"
+
+              pr_number="$(gh pr view "${branch}" --repo "${{ github.repository }}" --json number --jq '.number')"
+              pr_url="$(gh pr view "${branch}" --repo "${{ github.repository }}" --json url --jq '.url')"
+            else
+              build_pr_body "${WORKDIR}/issue-${first_issue}-body.md" "${updated_body_file}" "${group_file}" ""
+
+              pr_url="$(
+                gh pr create \
+                  --repo "${{ github.repository }}" \
+                  --base "${DEFAULT_BRANCH}" \
+                  --head "${branch}" \
+                  --title "fix(hotfix): add remediation for issues ${issue_list}" \
+                  --body-file "${updated_body_file}"
+              )"
+              pr_number="$(gh pr view "${branch}" --repo "${{ github.repository }}" --json number --jq '.number')"
+            fi
+
+            while read -r grouped_issue; do
+              [ -z "${grouped_issue}" ] && continue
+              printf '%s\t%s\t%s\n' "${grouped_issue}" "${pr_number}" "${pr_url}" >> "${ALL_RESULTS_FILE}"
+            done < "${group_file}"
+
+            {
+              echo "pr_number=${pr_number}"
+              echo "pr_url=${pr_url}"
+              echo "branch=${branch}"
+            } >> "$GITHUB_OUTPUT"
+
+            echo "::endgroup::"
+          done
+
+          if [ -s "${ALL_RESULTS_FILE}" ]; then
+            echo "Generated or updated remediation PRs:"
+            cat "${ALL_RESULTS_FILE}"
           fi
 
-          {
-            echo "pr_number=${PR_NUMBER}"
-            echo "pr_url=${PR_URL}"
-            echo "branch=${BRANCH}"
-          } >> "$GITHUB_OUTPUT"
+          while IFS=$'\t' read -r commented_issue commented_pr_number commented_pr_url; do
+            [ -z "${commented_issue}" ] && continue
+            [ -z "${commented_pr_url}" ] && continue
 
-      - name: Comment on issue
-        if: github.event_name == 'workflow_dispatch' || github.event.action != 'edited'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
-          PR_NUMBER: ${{ steps.hotfix_pr.outputs.pr_number }}
-          PR_URL: ${{ steps.hotfix_pr.outputs.pr_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -n "${PR_URL}" ]; then
-            body="Generated or updated hotfix remediation in PR #${PR_NUMBER}: ${PR_URL}"
-          else
-            body="Generated or updated a hotfix pull request for this issue."
-          fi
-
-          gh issue comment "${ISSUE_NUMBER}" \
-            --repo "${{ github.repository }}" \
-            --body "${body}"
+            body="Generated or updated hotfix remediation in PR #${commented_pr_number}: ${commented_pr_url}"
+            gh issue comment "${commented_issue}" \
+              --repo "${{ github.repository }}" \
+              --body "${body}"
+          done < "${ALL_RESULTS_FILE}"
