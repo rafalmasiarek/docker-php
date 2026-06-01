@@ -135,11 +135,31 @@ jobs:
           sanitize_pr_body() {
             local input_file="$1"
             local output_file="$2"
+
             sed -E \
               -e '/^[[:space:]]*(Fixes|Closes|Resolves)[[:space:]]+#[0-9]+[[:space:]]*$/Id' \
               -e '/^## Additional remediation issues[[:space:]]*$/Id' \
-              -e '/^[[:space:]]*$/N;/^\n$/D' \
-              "${input_file}" > "${output_file}"
+              "${input_file}" \
+              | awk '
+                  /^## Remediation issues[[:space:]]*$/ {
+                    skip = 1
+                    next
+                  }
+
+                  /^## / {
+                    skip = 0
+                  }
+
+                  skip {
+                    next
+                  }
+
+                  {
+                    print
+                  }
+                ' \
+              | sed -E '/^[[:space:]]*$/N;/^\n$/D' \
+              > "${output_file}"
           }
 
           build_remediation_issue_list() {
