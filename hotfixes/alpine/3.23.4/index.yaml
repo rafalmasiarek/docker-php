@@ -79,3 +79,10 @@ hotfixes:
     - imagemagick-jpeg<7.1.2.23-r0
     - imagemagick-libs<7.1.2.23-r0
     - imagemagick<7.1.2.23-r0
+- id: apk-upgrade-libssh2-1.11.1-r2
+  file: apk-upgrade-libssh2-1.11.1-r2.sh
+  match:
+    cves:
+    - CVE-2026-7598
+    packages:
+    - libssh2<1.11.1-r2

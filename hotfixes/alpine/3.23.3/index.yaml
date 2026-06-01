@@ -117,3 +117,10 @@ hotfixes:
     packages:
     - libecpg<18.4-r0
     - libpq<18.4-r0
+- id: apk-upgrade-libssh2-1.11.1-r2
+  file: apk-upgrade-libssh2-1.11.1-r2.sh
+  match:
+    cves:
+    - CVE-2026-7598
+    packages:
+    - libssh2<1.11.1-r2
