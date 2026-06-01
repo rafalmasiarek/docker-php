@@ -31,3 +31,10 @@ hotfixes:
     packages:
     - libecpg<17.10-r0
     - libpq<17.10-r0
+- id: apk-upgrade-libxml2-2.13.9-r1
+  file: apk-upgrade-libxml2-2.13.9-r1.sh
+  match:
+    cves:
+    - CVE-2026-6732
+    packages:
+    - libxml2<2.13.9-r1
