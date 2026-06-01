@@ -56,6 +56,25 @@ def normalize_list(value: Any) -> list[str]:
     return []
 
 
+def normalize_issue_numbers(values: list[str]) -> list[str]:
+    issues: set[int] = set()
+
+    for value in values:
+        for item in str(value or "").split(","):
+            item = item.strip()
+            item = item.removeprefix("#").strip()
+
+            if not item:
+                continue
+
+            if not item.isdigit():
+                raise SystemExit(f"Invalid related issue number: {item}")
+
+            issues.add(int(item))
+
+    return [str(issue) for issue in sorted(issues)]
+
+
 def extract_hotfix_json(body: str) -> dict[str, Any]:
     for pattern in HOTFIX_MARKER_PATTERNS:
         match = pattern.search(body or "")
@@ -406,7 +425,14 @@ def generate_hotfix_files(data: dict[str, Any]) -> list[str]:
     return sorted(set(changed_files))
 
 
-def build_pr_summary(issue_number: str, data: dict[str, Any], changed_files: list[str]) -> str:
+def build_pr_summary(
+    issue_number: str,
+    data: dict[str, Any],
+    changed_files: list[str],
+    related_issues: list[str],
+) -> str:
+    related_issues = normalize_issue_numbers([issue_number, *related_issues])
+
     cves = ", ".join(f"`{cve}`" for cve in data["cves"])
     alpine_versions = ", ".join(f"`{version}`" for version in data["alpine_full_versions"])
 
@@ -416,10 +442,19 @@ def build_pr_summary(issue_number: str, data: dict[str, Any], changed_files: lis
     ]
 
     file_lines = [f"- `{path}`" for path in changed_files]
+    issue_lines = [f"- #{issue}" for issue in related_issues]
+
+    if len(related_issues) == 1:
+        summary_line = f"Adds an Alpine hotfix generated from security issue #{related_issues[0]}."
+    else:
+        summary_line = "Adds Alpine hotfix remediation generated from these security issues."
 
     return "\n".join(
         [
-            f"Adds an Alpine hotfix generated from security issue #{issue_number}.",
+            summary_line,
+            "",
+            "## Remediation issues",
+            *issue_lines,
             "",
             "## CVEs",
             cves,
@@ -435,8 +470,6 @@ def build_pr_summary(issue_number: str, data: dict[str, Any], changed_files: lis
             "",
             "After merge, the regular image build will verify whether the CVE is gone.",
             "",
-            f"Fixes #{issue_number}",
-            "",
         ]
     )
 
@@ -447,6 +480,17 @@ def main() -> int:
     )
     parser.add_argument("--repo", required=True, help="GitHub repository, for example owner/repo.")
     parser.add_argument("--issue", required=True, help="GitHub issue number.")
+    parser.add_argument(
+        "--related-issue",
+        action="append",
+        default=[],
+        help="Related GitHub issue number to list in the generated PR body. Can be used multiple times.",
+    )
+    parser.add_argument(
+        "--related-issues",
+        default="",
+        help="Comma-separated related GitHub issue numbers to list in the generated PR body.",
+    )
     parser.add_argument(
         "--output",
         default="/tmp/generated-hotfix-pr-body.md",
@@ -491,11 +535,19 @@ def main() -> int:
     else:
         changed_files = generate_hotfix_files(data)
 
-    summary = build_pr_summary(str(args.issue), data, changed_files)
+    related_issues = normalize_issue_numbers(
+        [
+            *args.related_issue,
+            args.related_issues,
+        ]
+    )
+
+    summary = build_pr_summary(str(args.issue), data, changed_files, related_issues)
     Path(args.output).write_text(summary, encoding="utf-8")
 
     report = {
         "issue": int(args.issue),
+        "related_issues": [int(issue) for issue in related_issues],
         "data": data,
         "identity": identity,
         "changed_files": changed_files,
