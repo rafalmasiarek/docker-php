@@ -100,12 +100,20 @@ jobs:
 
             echo "Inspecting issue #${selected_issue}"
 
-            python3 scripts/create-hotfix-pr-from-issue.py \
+            if ! python3 scripts/create-hotfix-pr-from-issue.py \
               --repo "${{ github.repository }}" \
               --issue "${selected_issue}" \
               --output "${WORKDIR}/issue-${selected_issue}-body.md" \
               --metadata-output "${WORKDIR}/issue-${selected_issue}-metadata.json" \
-              --no-write
+              --no-write; then
+              echo "Issue #${selected_issue} cannot be converted into a hotfix. Skipping."
+              continue
+            fi
+
+            if [ ! -s "${WORKDIR}/issue-${selected_issue}-metadata.json" ]; then
+              echo "Issue #${selected_issue} did not produce metadata. Skipping."
+              continue
+            fi
 
             hotfix_id="$(jq -r '.hotfix_id // empty' "${WORKDIR}/issue-${selected_issue}-metadata.json")"
 
@@ -200,6 +208,12 @@ jobs:
                 print "Adds Alpine hotfix remediation generated from these security issues:"
                 next
               }
+
+              NR == 1 && /^Adds Alpine hotfix remediation generated from these security issues\.$/ {
+                print "Adds Alpine hotfix remediation generated from these security issues:"
+                next
+              }
+
               { print }
             ' "${sanitized_file}" > "${with_summary_file}"
 
@@ -312,14 +326,28 @@ jobs:
 
               echo "Generating remediation from issue #${grouped_issue}"
 
-              python3 scripts/create-hotfix-pr-from-issue.py \
+              if ! python3 scripts/create-hotfix-pr-from-issue.py \
                 --repo "${{ github.repository }}" \
                 --issue "${grouped_issue}" \
                 --output "${WORKDIR}/issue-${grouped_issue}-body.md" \
-                --metadata-output "${WORKDIR}/issue-${grouped_issue}-metadata.json"
+                --metadata-output "${WORKDIR}/issue-${grouped_issue}-metadata.json"; then
+                echo "Issue #${grouped_issue} failed while generating hotfix files. Skipping."
+                continue
+              fi
+
+              if [ ! -s "${WORKDIR}/issue-${grouped_issue}-metadata.json" ]; then
+                echo "Issue #${grouped_issue} did not produce metadata while generating files. Skipping."
+                continue
+              fi
 
               jq -r '.paths[]' "${WORKDIR}/issue-${grouped_issue}-metadata.json" >> "${all_hotfix_paths_file}"
             done < "${group_file}"
+
+            if [ ! -s "${all_hotfix_paths_file}" ]; then
+              echo "No hotfix paths were generated for ${hotfix_id}."
+              echo "::endgroup::"
+              continue
+            fi
 
             if [ -d hotfixes ]; then
               find hotfixes \( -name "index.yaml" -o -name "index.yml" -o -name "index.json" \) -print \
