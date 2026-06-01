@@ -16,7 +16,6 @@ on:
   push:
     branches:
       - "bot/add-php-*"
-      - "hotfix/*"
     paths:
       - "versions/**"
       - "rootfs/**"
