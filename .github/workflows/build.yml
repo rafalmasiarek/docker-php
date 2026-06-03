@@ -371,7 +371,7 @@ jobs:
           key: trivy-${{ runner.os }}-${{ runner.arch }}-latest
 
       - name: Install Trivy CLI
-        uses: aquasecurity/setup-trivy@v0.2.6
+        uses: aquasecurity/setup-trivy@v0.3.0
 
       - name: Cache sanityctl
         uses: actions/cache@v5
