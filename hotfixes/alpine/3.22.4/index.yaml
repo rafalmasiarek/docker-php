@@ -45,3 +45,16 @@ hotfixes:
     - CVE-2026-7598
     packages:
     - libssh2<1.11.1-r1
+- id: apk-upgrade-libcrypto3-3.5.7-r0-libssl3-3.5.7-r0-openssl-3.5.7-r0
+  file: apk-upgrade-libcrypto3-3.5.7-r0-libssl3-3.5.7-r0-openssl-3.5.7-r0.sh
+  match:
+    cves:
+    - CVE-2026-34182
+    - CVE-2026-34183
+    - CVE-2026-42764
+    - CVE-2026-45445
+    - CVE-2026-45447
+    packages:
+    - libcrypto3<3.5.7-r0
+    - libssl3<3.5.7-r0
+    - openssl<3.5.7-r0
