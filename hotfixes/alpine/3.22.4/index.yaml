@@ -58,3 +58,10 @@ hotfixes:
     - libcrypto3<3.5.7-r0
     - libssl3<3.5.7-r0
     - openssl<3.5.7-r0
+- id: apk-upgrade-libexpat-2.8.1-r0
+  file: apk-upgrade-libexpat-2.8.1-r0.sh
+  match:
+    cves:
+    - CVE-2026-45186
+    packages:
+    - libexpat<2.8.1-r0
