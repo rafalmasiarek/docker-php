@@ -59,7 +59,7 @@ jobs:
       built_pairs: ${{ steps.gen.outputs.built_pairs }}
       alpine_groups: ${{ steps.gen.outputs.alpine_groups }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -306,7 +306,7 @@ jobs:
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Decide publish namespace
         id: ns
@@ -365,7 +365,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Cache Trivy data
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/trivy
           key: trivy-${{ runner.os }}-${{ runner.arch }}-latest
@@ -374,7 +374,7 @@ jobs:
         uses: aquasecurity/setup-trivy@v0.3.1
 
       - name: Cache sanityctl
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/sanityctl
           key: sanityctl-${{ runner.os }}-${{ runner.arch }}-latest
@@ -1870,7 +1870,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.ACTIONS_PAT }}
@@ -2279,7 +2279,7 @@ jobs:
       pages: write
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -2360,7 +2360,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
