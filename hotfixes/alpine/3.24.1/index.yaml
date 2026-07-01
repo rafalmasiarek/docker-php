@@ -22,3 +22,14 @@ hotfixes:
     - CVE-2026-55200
     packages:
     - libssh2<1.11.1-r3
+- id: apk-upgrade-curl-8.21.0-r0-libcurl-8.21.0-r0
+  file: apk-upgrade-curl-8.21.0-r0-libcurl-8.21.0-r0.sh
+  match:
+    cves:
+    - CVE-2026-11856
+    - CVE-2026-8925
+    - CVE-2026-8927
+    - CVE-2026-9079
+    packages:
+    - curl<8.21.0-r0
+    - libcurl<8.21.0-r0
