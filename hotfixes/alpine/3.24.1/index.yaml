@@ -14,3 +14,11 @@ hotfixes:
     - CVE-2026-56412
     packages:
     - libexpat<2.8.2-r0
+- id: apk-upgrade-libssh2-1.11.1-r3
+  file: apk-upgrade-libssh2-1.11.1-r3.sh
+  match:
+    cves:
+    - CVE-2026-55199
+    - CVE-2026-55200
+    packages:
+    - libssh2<1.11.1-r3
