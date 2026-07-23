@@ -1,10 +1,10 @@
 {
   "critical": 0,
-  "digest": "sha256:7f0bf36f8348b07f182c123281e49cd2311cc21432c5c851b2e43c11346acc8e",
+  "digest": "sha256:c937027fae1e0011f84f74aee36351eeb63f4bb8e551191fc275bd0205922513",
   "high": 0,
-  "image_date": "ghcr.io/rafalmasiarek/php:8.4-fpm-2026-07-22",
+  "image_date": "ghcr.io/rafalmasiarek/php:8.4-fpm-2026-07-23",
   "image_moving": "ghcr.io/rafalmasiarek/php:8.4-fpm",
-  "image_sha": "ghcr.io/rafalmasiarek/php:8.4-fpm-sha-c68efc4",
+  "image_sha": "ghcr.io/rafalmasiarek/php:8.4-fpm-sha-485d044",
   "medium": 0,
   "os": "3.23.3",
   "php": "8.4",
