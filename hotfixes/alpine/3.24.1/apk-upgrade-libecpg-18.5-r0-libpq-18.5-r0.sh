@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# generated-by: create-hotfix-pr-from-issue.py
+# hotfix-id: apk-upgrade-libecpg-18.5-r0-libpq-18.5-r0
+# hotfix-cves: CVE-2026-14662,CVE-2026-14663,CVE-2026-14664,CVE-2026-14666,CVE-2026-14668,CVE-2026-14669,CVE-2026-14670,CVE-2026-14671,CVE-2026-14672,CVE-2026-14676,CVE-2026-14677,CVE-2026-14678,CVE-2026-14679,CVE-2026-14680,CVE-2026-15741,CVE-2026-15742,CVE-2026-16238,CVE-2026-16239,CVE-2026-18024,CVE-2026-18408,CVE-2026-19385,CVE-2026-6464,CVE-2026-6470,CVE-2026-6471
+# hotfix-packages: libecpg<18.5-r0,libpq<18.5-r0
+set -eu
+
+apk add --no-cache --upgrade 'libecpg>=18.5-r0' 'libpq>=18.5-r0'
