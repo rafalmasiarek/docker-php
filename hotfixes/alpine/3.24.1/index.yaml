@@ -99,3 +99,15 @@ hotfixes:
     packages:
     - libecpg<18.5-r0
     - libpq<18.5-r0
+- id: apk-upgrade-libcrypto3-3.5.8-r0-libssl3-3.5.8-r0-openssl-3.5.8-r0
+  file: apk-upgrade-libcrypto3-3.5.8-r0-libssl3-3.5.8-r0-openssl-3.5.8-r0.sh
+  match:
+    cves:
+    - CVE-2026-14456
+    - CVE-2026-18798
+    - CVE-2026-63072
+    - CVE-2026-63076
+    packages:
+    - libcrypto3<3.5.8-r0
+    - libssl3<3.5.8-r0
+    - openssl<3.5.8-r0
