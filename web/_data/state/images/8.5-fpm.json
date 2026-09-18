@@ -1,12 +1,12 @@
 {
   "critical": 0,
-  "digest": "sha256:a2a3eeb4ecfd9e9e7928983ac95a948c77331914f9ca449f420db9d71e43f1f8",
+  "digest": "sha256:b0350ad926cb46cdc64b0183e8aa4d8009b4dd3042bb990bac2cf5cfbcc293c2",
   "high": 0,
-  "image_date": "ghcr.io/rafalmasiarek/php:8.5-fpm-2026-09-17",
+  "image_date": "ghcr.io/rafalmasiarek/php:8.5-fpm-2026-09-18",
   "image_moving": "ghcr.io/rafalmasiarek/php:8.5-fpm",
-  "image_sha": "ghcr.io/rafalmasiarek/php:8.5-fpm-sha-df04bee",
+  "image_sha": "ghcr.io/rafalmasiarek/php:8.5-fpm-sha-63d7f37",
   "medium": 0,
-  "os": "3.24.1",
+  "os": "3.24.2",
   "php": "8.5",
   "report_file": "trivy-8.5-fpm.html",
   "variant": "fpm"
