@@ -136,3 +136,17 @@ hotfixes:
     - libblkid<2.42.3-r0
     - libmount<2.42.3-r0
     - libuuid<2.42.3-r0
+- id: apk-upgrade-curl-8.22.0-r0-libcurl-8.22.0-r0
+  file: apk-upgrade-curl-8.22.0-r0-libcurl-8.22.0-r0.sh
+  match:
+    cves:
+    - CVE-2026-13608
+    - CVE-2026-18924
+    - CVE-2026-19931
+    - CVE-2026-80229
+    - CVE-2026-80230
+    - CVE-2026-80255
+    - CVE-2026-82209
+    packages:
+    - curl<8.22.0-r0
+    - libcurl<8.22.0-r0
