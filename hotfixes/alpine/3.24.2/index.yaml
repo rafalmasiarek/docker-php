@@ -1,0 +1,8 @@
+hotfixes:
+- id: apk-upgrade-libexpat-2.8.5-r0
+  file: apk-upgrade-libexpat-2.8.5-r0.sh
+  match:
+    cves:
+    - CVE-2026-93990
+    packages:
+    - libexpat<2.8.5-r0
