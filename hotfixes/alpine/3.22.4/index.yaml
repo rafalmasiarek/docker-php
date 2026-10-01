@@ -107,3 +107,10 @@ hotfixes:
     - CVE-2026-93990
     packages:
     - libexpat<2.8.5-r0
+- id: apk-upgrade-libpng-1.6.59-r0
+  file: apk-upgrade-libpng-1.6.59-r0.sh
+  match:
+    cves:
+    - CVE-2026-40930
+    packages:
+    - libpng<1.6.59-r0
