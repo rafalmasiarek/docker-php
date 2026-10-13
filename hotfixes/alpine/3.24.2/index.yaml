@@ -6,3 +6,10 @@ hotfixes:
     - CVE-2026-93990
     packages:
     - libexpat<2.8.5-r0
+- id: apk-upgrade-nghttp2-libs-1.70.0-r0
+  file: apk-upgrade-nghttp2-libs-1.70.0-r0.sh
+  match:
+    cves:
+    - CVE-2026-58055
+    packages:
+    - nghttp2-libs<1.70.0-r0
