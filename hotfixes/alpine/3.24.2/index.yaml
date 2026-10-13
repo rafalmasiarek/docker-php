@@ -20,3 +20,10 @@ hotfixes:
     - CVE-2026-103111
     packages:
     - pcre2<10.49-r0
+- id: apk-upgrade-libpng-1.6.59-r0
+  file: apk-upgrade-libpng-1.6.59-r0.sh
+  match:
+    cves:
+    - CVE-2026-46675
+    packages:
+    - libpng<1.6.59-r0
