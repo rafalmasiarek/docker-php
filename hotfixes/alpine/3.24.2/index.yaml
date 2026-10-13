@@ -13,3 +13,10 @@ hotfixes:
     - CVE-2026-58055
     packages:
     - nghttp2-libs<1.70.0-r0
+- id: apk-upgrade-pcre2-10.49-r0
+  file: apk-upgrade-pcre2-10.49-r0.sh
+  match:
+    cves:
+    - CVE-2026-103111
+    packages:
+    - pcre2<10.49-r0
