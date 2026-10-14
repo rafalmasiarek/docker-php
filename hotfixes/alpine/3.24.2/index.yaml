@@ -27,3 +27,10 @@ hotfixes:
     - CVE-2026-46675
     packages:
     - libpng<1.6.59-r0
+- id: apk-upgrade-zlib-1.3.2-r1
+  file: apk-upgrade-zlib-1.3.2-r1.sh
+  match:
+    cves:
+    - CVE-2026-85091
+    packages:
+    - zlib<1.3.2-r1
