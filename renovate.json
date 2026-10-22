@@ -48,6 +48,26 @@
       "matchDepNames": ["ruby"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "Only update php82 to newer 8.2.x releases",
+      "matchDepNames": ["php82"],
+      "allowedVersions": "/^8\\.2\\./"
+    },
+    {
+      "description": "Only update php83 to newer 8.3.x releases",
+      "matchDepNames": ["php83"],
+      "allowedVersions": "/^8\\.3\\./"
+    },
+    {
+      "description": "Only update php84 to newer 8.4.x releases",
+      "matchDepNames": ["php84"],
+      "allowedVersions": "/^8\\.4\\./"
+    },
+    {
+      "description": "Only update php85 to newer 8.5.x releases",
+      "matchDepNames": ["php85"],
+      "allowedVersions": "/^8\\.5\\./"
     }
   ],
 

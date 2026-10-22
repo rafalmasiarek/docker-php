@@ -217,6 +217,31 @@ jobs:
 
             created.append(mm)
 
+          if created:
+            renovate_path = ROOT / "renovate.json"
+            renovate_config = json.loads(renovate_path.read_text(encoding="utf-8"))
+            package_rules = renovate_config.setdefault("packageRules", [])
+            existing_dep_names = {
+              name
+              for rule in package_rules
+              for name in rule.get("matchDepNames", [])
+            }
+
+            for mm in created:
+              dep_name = "php" + mm.replace(".", "")
+              if dep_name in existing_dep_names:
+                continue
+              package_rules.append({
+                "description": f"Only update {dep_name} to newer {mm}.x releases",
+                "matchDepNames": [dep_name],
+                "allowedVersions": f"/^{re.escape(mm)}\\./",
+              })
+
+            renovate_path.write_text(
+              json.dumps(renovate_config, indent=2) + "\n",
+              encoding="utf-8",
+            )
+
           out = os.environ["GITHUB_OUTPUT"]
           with open(out, "a", encoding="utf-8") as fh:
             fh.write(f"new_php={','.join(created)}\n")
@@ -239,6 +264,7 @@ jobs:
             - Scaffolded from existing version: `${{ steps.discover.outputs.base_php }}`
 
             Dockerfiles were updated to use full upstream tags for all variants present in the base PHP branch.
+            A matching `allowedVersions` rule was added to `renovate.json` so Renovate keeps tracking this version on its own patch line.
           branch: "bot/add-php-${{ steps.discover.outputs.new_php }}"
           delete-branch: true
           labels: |
