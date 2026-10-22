@@ -59,9 +59,10 @@
         "/^versions\\/[^/]+\\/[^/]+\\/Dockerfile$/"
       ],
       "matchStrings": [
-        "FROM\\s+php:(?<currentValue>\\d+\\.\\d+\\.\\d+-(?<compatibility>[^\\s-]+)-alpine\\d+\\.\\d+)"
+        "FROM\\s+php:(?<currentValue>(?<major>\\d+)\\.(?<minor>\\d+)\\.\\d+-(?<compatibility>[^\\s-]+)-alpine\\d+\\.\\d+)"
       ],
-      "depNameTemplate": "php",
+      "depNameTemplate": "php{{major}}{{minor}}",
+      "packageNameTemplate": "php",
       "datasourceTemplate": "docker",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<compatibility>[^-]+)-alpine(?<build>\\d+)\\.(?<revision>\\d+)$"
     }
