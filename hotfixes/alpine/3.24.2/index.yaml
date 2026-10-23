@@ -34,3 +34,26 @@ hotfixes:
     - CVE-2026-85091
     packages:
     - zlib<1.3.2-r1
+- id: apk-upgrade-libssh2-1.11.1-r4
+  file: apk-upgrade-libssh2-1.11.1-r4.sh
+  match:
+    cves:
+    - CVE-2025-15661
+    - CVE-2026-58050
+    - CVE-2026-58051
+    - CVE-2026-66032
+    - CVE-2026-66033
+    - CVE-2026-66034
+    - CVE-2026-66035
+    packages:
+    - libssh2<1.11.1-r4
+- id: apk-upgrade-libx11-1.8.14-r0
+  file: apk-upgrade-libx11-1.8.14-r0.sh
+  match:
+    cves:
+    - CVE-2026-88806
+    - CVE-2026-94283
+    - CVE-2026-94284
+    - CVE-2026-94285
+    packages:
+    - libx11<1.8.14-r0
