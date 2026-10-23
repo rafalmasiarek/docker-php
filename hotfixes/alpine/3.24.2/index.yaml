@@ -57,3 +57,11 @@ hotfixes:
     - CVE-2026-94285
     packages:
     - libx11<1.8.14-r0
+- id: apk-upgrade-libexpat-2.9.0-r0
+  file: apk-upgrade-libexpat-2.9.0-r0.sh
+  match:
+    cves:
+    - CVE-2026-102633
+    - CVE-2026-77214
+    packages:
+    - libexpat<2.9.0-r0
