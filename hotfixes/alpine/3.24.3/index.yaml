@@ -1,0 +1,8 @@
+hotfixes:
+- id: apk-upgrade-brotli-libs-1.2.1-r0
+  file: apk-upgrade-brotli-libs-1.2.1-r0.sh
+  match:
+    cves:
+    - CVE-2026-111497
+    packages:
+    - brotli-libs<1.2.1-r0
