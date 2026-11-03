@@ -15,3 +15,12 @@ hotfixes:
     packages:
     - curl<8.23.0-r0
     - libcurl<8.23.0-r0
+- id: apk-upgrade-libexpat-2.10.0-r0
+  file: apk-upgrade-libexpat-2.10.0-r0.sh
+  match:
+    cves:
+    - CVE-2026-113351
+    - CVE-2026-117610
+    - CVE-2026-118370
+    packages:
+    - libexpat<2.10.0-r0
