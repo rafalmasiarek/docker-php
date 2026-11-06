@@ -1,12 +1,12 @@
 {
   "critical": 0,
-  "digest": "sha256:b84c0169002d83e5291564537c7ceafc6af84eff5c0536db176cff8bc600b587",
+  "digest": "sha256:c489cb4883948a73b7242c426932a1dd1f2edabaea68335b809898ceb61e115b",
   "high": 0,
-  "image_date": "ghcr.io/rafalmasiarek/php:8.4-cli-2026-11-05",
+  "image_date": "ghcr.io/rafalmasiarek/php:8.4-cli-2026-11-06",
   "image_moving": "ghcr.io/rafalmasiarek/php:8.4-cli",
-  "image_sha": "ghcr.io/rafalmasiarek/php:8.4-cli-sha-9c52f81",
+  "image_sha": "ghcr.io/rafalmasiarek/php:8.4-cli-sha-e24cc16",
   "medium": 0,
-  "os": "3.24.3",
+  "os": "3.24.4",
   "php": "8.4",
   "report_file": "trivy-8.4-cli.html",
   "variant": "cli"
