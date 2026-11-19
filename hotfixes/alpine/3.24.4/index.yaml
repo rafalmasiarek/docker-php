@@ -1,0 +1,8 @@
+hotfixes:
+- id: apk-upgrade-zlib-1.4-r0
+  file: apk-upgrade-zlib-1.4-r0.sh
+  match:
+    cves:
+    - CVE-2026-4738
+    packages:
+    - zlib<1.4-r0
