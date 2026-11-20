@@ -228,5 +228,15 @@
     "php": "8.5",
     "release_date": "2025-11-20",
     "version": "8.5.12"
+  },
+  "8.6": {
+    "eoas": "2028-12-31",
+    "eol": "2030-12-31",
+    "is_eol": false,
+    "is_maintained": true,
+    "latest_date": "2026-11-19",
+    "php": "8.6",
+    "release_date": "2026-11-19",
+    "version": "8.6.0"
   }
 }
