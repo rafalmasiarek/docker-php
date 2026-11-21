@@ -1,10 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-
   "extends": [
     "config:recommended"
   ],
-
   "timezone": "Europe/Warsaw",
   "labels": [
     "dependencies"
@@ -16,61 +14,92 @@
   "schedule": [
     "after 02:00 and before 06:00"
   ],
-
   "dockerfile": {
     "enabled": false
   },
-
   "packageRules": [
     {
       "description": "PHP images: keep PHP major/minor, allow PHP patches and Alpine bumps",
-      "matchManagers": ["custom.regex"],
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["php"],
-      "matchFileNames": ["versions/**/Dockerfile"],
-      "matchUpdateTypes": ["major", "minor"],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "php"
+      ],
+      "matchFileNames": [
+        "versions/**/Dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
       "enabled": false,
       "groupName": "base images"
     },
     {
       "description": "Group CI tooling updates",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "ci tooling",
       "commitBody": "[no ci]"
     },
     {
       "description": "Group web dependencies",
-      "matchManagers": ["bundler"],
+      "matchManagers": [
+        "bundler"
+      ],
       "groupName": "web dependencies"
     },
     {
       "description": "Keep Ruby toolchain stable",
-      "matchDepNames": ["ruby"],
-      "matchUpdateTypes": ["major"],
+      "matchDepNames": [
+        "ruby"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     },
     {
       "description": "Only update php82 to newer 8.2.x releases",
-      "matchDepNames": ["php82"],
+      "matchDepNames": [
+        "php82"
+      ],
       "allowedVersions": "/^8\\.2\\./"
     },
     {
       "description": "Only update php83 to newer 8.3.x releases",
-      "matchDepNames": ["php83"],
+      "matchDepNames": [
+        "php83"
+      ],
       "allowedVersions": "/^8\\.3\\./"
     },
     {
       "description": "Only update php84 to newer 8.4.x releases",
-      "matchDepNames": ["php84"],
+      "matchDepNames": [
+        "php84"
+      ],
       "allowedVersions": "/^8\\.4\\./"
     },
     {
       "description": "Only update php85 to newer 8.5.x releases",
-      "matchDepNames": ["php85"],
+      "matchDepNames": [
+        "php85"
+      ],
       "allowedVersions": "/^8\\.5\\./"
+    },
+    {
+      "description": "Only update php86 to newer 8.6.x releases",
+      "matchDepNames": [
+        "php86"
+      ],
+      "allowedVersions": "/^8\\.6\\./"
     }
   ],
-
   "customManagers": [
     {
       "customType": "regex",
